@@ -3,6 +3,7 @@ include LICENSE
 include CHANGELOG.md
 include pyproject.toml
 graft src/model_exporter
+recursive-include src/model_exporter *.yaml *.yml *.json *.md
 prune tests
 prune tools
 prune EXAMPLES

@@ -6,16 +6,17 @@ build-backend = "setuptools.build_meta"
 name = "flouds-model-exporter"
 version = "0.1.0"
 description = "Flouds Model Exporter: ONNX export and optimization utilities"
-readme = "README.md"
+readme = { file = "README.md", content-type = "text/markdown" }
+keywords = ["onnx", "export", "huggingface", "optimum", "model-export"]
 requires-python = ">=3.11,<3.13"
 authors = [{ name = "Goutam Malakar" }]
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 
 [project.urls]
-Homepage = "https://github.com/gmalakar/FloudsModelExporter"
-Repository = "https://github.com/gmalakar/FloudsModelExporter"
-Issues = "https://github.com/gmalakar/FloudsModelExporter/issues"
+Homepage = "https://github.com/gmalakar/flouds_model_exporter"
+Repository = "https://github.com/gmalakar/flouds_model_exporter"
+Issues = "https://github.com/gmalakar/flouds_model_exporter/issues"
 classifiers = [
 	"Programming Language :: Python :: 3",
 	"Programming Language :: Python :: 3.11",
@@ -70,6 +71,9 @@ pythonpath = ["src"]
 where = ["src"]
 include = ["model_exporter*"]
 exclude = ["tests*", "tools*"]
+
+[tool.setuptools]
+include-package-data = true
 
 [tool.flake8]
 max-line-length = 150

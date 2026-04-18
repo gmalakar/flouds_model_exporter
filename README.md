@@ -1,10 +1,10 @@
-# FloudsModelExporter
+# flouds_model_exporter
 
 Production-grade ONNX model export toolkit for HuggingFace transformers.
 
 ## Overview
 
-FloudsModelExporter provides a unified pipeline for converting HuggingFace models to optimized ONNX format:
+flouds_model_exporter provides a unified pipeline for converting HuggingFace models to optimized ONNX format:
 
 - **Universal Export** – Supports embedding models, seq2seq, classification, and large language models (LLMs)
 - **Smart Optimization** – Automatic ONNX optimization with configurable levels and portability modes
@@ -27,8 +27,8 @@ pip install flouds-model-exporter
 
 ```powershell
 # Clone the repository
-git clone https://github.com/gmalakar/FloudsModelExporter.git
-cd FloudsModelExporter
+git clone https://github.com/gmalakar/flouds_model_exporter.git
+cd flouds_model_exporter
 
 # Create a Python 3.11 or 3.12 virtual environment
 py -3.11 -m venv .venv
