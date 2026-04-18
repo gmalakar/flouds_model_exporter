@@ -1,3 +1,10 @@
+# =============================================================================
+# File: test_memory.py
+# Date: 2026-04-18
+# Copyright (c) 2026 Goutam Malakar.
+# SPDX-License-Identifier: Apache-2.0
+# =============================================================================
+
 import importlib
 import sys
 import types
@@ -11,7 +18,6 @@ def import_memory_module(monkeypatch, virtual_memory_impl) -> Any:
     monkeypatch.setitem(sys.modules, "psutil", fake_psutil)
     sys.modules.pop("model_exporter.utils.memory", None)
     return importlib.import_module("model_exporter.utils.memory")
-
 
 
 def test_get_memory_info_uses_psutil_values(monkeypatch):
@@ -33,7 +39,6 @@ def test_get_memory_info_uses_psutil_values(monkeypatch):
     }
 
 
-
 def test_memory_guard_triggers_cleanup_and_recovers(monkeypatch):
     memory = import_memory_module(monkeypatch, lambda: None)
     calls = {"cleanup": 0}
@@ -48,7 +53,6 @@ def test_memory_guard_triggers_cleanup_and_recovers(monkeypatch):
 
     assert memory.memory_guard(min_free_gb=4.0, auto_cleanup=True) is True
     assert calls["cleanup"] == 1
-
 
 
 def test_memory_monitor_cleans_up_on_exit(monkeypatch):

@@ -34,9 +34,7 @@ def _run_main_export_subprocess(me_kwargs: dict, logger: Any) -> tuple[bool, str
         json.dump(me_kwargs, tmpf)
         tmpf.close()
 
-        runner_fh = _tempfile.NamedTemporaryFile(
-            mode="w", delete=False, suffix=".py", encoding="utf-8"
-        )
+        runner_fh = _tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".py", encoding="utf-8")
         runner_code = """import json,sys
 from optimum.exporters.onnx import main_export
 
@@ -238,9 +236,7 @@ main_export(**kwargs)
         try:
             err_text = proc.stderr or ""
             if any(k in err_text for k in ("No space left", "ENOSPC", "Errno 28")):
-                tmpdir = (
-                    env.get("TMP") or env.get("TEMP") or env.get("TMPDIR") or _tempfile.gettempdir()
-                )
+                tmpdir = env.get("TMP") or env.get("TEMP") or env.get("TMPDIR") or _tempfile.gettempdir()
                 tmp_free = None
                 try:
                     tmp_free = _shutil.disk_usage(tmpdir).free // (1024 * 1024)
@@ -299,7 +295,10 @@ main_export(**kwargs)
                         "  - Update: pip install --upgrade onnxruntime onnx optimum\n"
                         "  - Some models may not support ONNX export on Windows"
                     )
-                    return False, f"Access violation crash (0xC0000005): {stderr_output[:500]}"
+                    return (
+                        False,
+                        f"Access violation crash (0xC0000005): {stderr_output[:500]}",
+                    )
 
             logger.warning("Failed to launch main_export subprocess: %s", e)
         except Exception:
@@ -311,12 +310,7 @@ main_export(**kwargs)
             try:
                 if var_name == "tmpf" and f_handle is not None:
                     os.unlink(f_handle.name)
-                elif (
-                    var_name == "runner_fh"
-                    and f_handle is not None
-                    and f_handle.name
-                    and os.path.exists(f_handle.name)
-                ):
+                elif var_name == "runner_fh" and f_handle is not None and f_handle.name and os.path.exists(f_handle.name):
                     os.unlink(f_handle.name)
             except Exception:
                 pass

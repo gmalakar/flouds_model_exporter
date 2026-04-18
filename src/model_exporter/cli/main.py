@@ -23,20 +23,13 @@ import sys
 import warnings
 
 from model_exporter.cli.cmd_batch import _add_batch_arguments, _run_batch
-from model_exporter.cli.cmd_export import (
-    _add_export_arguments,
-    _build_export_parser,
-    _run_export,
-)
+from model_exporter.cli.cmd_export import _add_export_arguments, _build_export_parser, _run_export
 from model_exporter.cli.cmd_optimize import _add_optimize_arguments, _run_optimize
 from model_exporter.cli.cmd_validate import _add_validate_arguments, _run_validate
 
-
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
-warnings.filterwarnings(
-    "ignore", message=".*torch.tensor results are registered as constants.*"
-)
+warnings.filterwarnings("ignore", message=".*torch.tensor results are registered as constants.*")
 
 
 def _build_root_parser():

@@ -41,19 +41,12 @@ def _find_encoder_onnx_files(onnx_files: list[Path]) -> list[Path]:
         May be empty if no suitable candidates are found.
     """
     merged_candidates = [
-        f
-        for f in onnx_files
-        if (f.name.lower().startswith("model") or f.name.lower().startswith("encoder_"))
-        and "merged" in f.name.lower()
+        f for f in onnx_files if (f.name.lower().startswith("model") or f.name.lower().startswith("encoder_")) and "merged" in f.name.lower()
     ]
     if merged_candidates:
         return merged_candidates
 
-    candidates = [
-        f
-        for f in onnx_files
-        if f.name.lower().startswith("model") or f.name.lower().startswith("encoder_")
-    ]
+    candidates = [f for f in onnx_files if f.name.lower().startswith("model") or f.name.lower().startswith("encoder_")]
     if candidates:
         return candidates
 
@@ -209,9 +202,7 @@ def optimize_if_encoder(
 
                 # Find any optimized artifact in the target folder.
                 # Simpler: look for any .onnx with 'optimized' in its filename.
-                optimized_candidates = [
-                    p for p in model_dir.glob("*.onnx") if "optimized" in p.name.lower()
-                ]
+                optimized_candidates = [p for p in model_dir.glob("*.onnx") if "optimized" in p.name.lower()]
 
                 if not optimized_candidates:
                     logger.warning("No optimized output found for %s", onnx_path.name)
@@ -274,9 +265,7 @@ def optimize_if_encoder(
 
             return 0
 
-        logger.info(
-            "Filewise optimization did not produce usable optimized artifacts; falling back to encoder/ copy approach."
-        )
+        logger.info("Filewise optimization did not produce usable optimized artifacts; falling back to encoder/ copy approach.")
 
     except Exception:
         logger.debug(
@@ -353,17 +342,13 @@ def optimize_if_encoder(
                         **load_kwargs,
                     )
 
-                    optimizer.optimize(
-                        save_dir=encoder_dir, optimization_config=optimization_config
-                    )
+                    optimizer.optimize(save_dir=encoder_dir, optimization_config=optimization_config)
                 except Exception as e:
                     logger.warning("Optimization failed for %s: %s", src_onnx.name, e)
                     continue
 
                 # Find the optimized artifact in encoder_dir — there will be only one.
-                optimized_candidates = [
-                    p for p in encoder_dir.glob("*.onnx") if "optimized" in p.name.lower()
-                ]
+                optimized_candidates = [p for p in encoder_dir.glob("*.onnx") if "optimized" in p.name.lower()]
                 if not optimized_candidates:
                     logger.info("No optimized output found for %s", src_onnx.name)
                     continue

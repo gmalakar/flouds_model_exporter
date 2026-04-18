@@ -1,3 +1,10 @@
+# =============================================================================
+# File: conftest.py
+# Date: 2026-04-18
+# Copyright (c) 2026 Goutam Malakar.
+# SPDX-License-Identifier: Apache-2.0
+# =============================================================================
+
 import importlib
 import json
 import sys
@@ -19,7 +26,6 @@ def add_src_to_path(monkeypatch: pytest.MonkeyPatch, repo_root: Path) -> None:
 
 
 @pytest.fixture
-
 def cli_module(monkeypatch: pytest.MonkeyPatch, repo_root: Path) -> tuple[Any, dict[str, Any]]:
     captured: dict[str, Any] = {"calls": []}
 

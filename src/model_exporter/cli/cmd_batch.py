@@ -12,16 +12,11 @@ import gc
 import os
 import time
 
-from model_exporter.cli.cmd_export import (
-    _build_export_parser,
-    _run_export,
-)
+from model_exporter.cli.cmd_export import _build_export_parser, _run_export
 
 # Default policy path: relative to this file so it works both in dev (src/)
 # and when the package is installed.
-_default_export_policy_path = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "config", "policy.yaml")
-)
+_default_export_policy_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config", "policy.yaml"))
 
 
 def _add_batch_arguments(parser):
@@ -79,12 +74,8 @@ def _add_batch_arguments(parser):
         action="store_true",
         help="Apply --skip-validator to all batch exports.",
     )
-    parser.add_argument(
-        "--optimize", action="store_true", help="Apply --optimize to all batch exports."
-    )
-    parser.add_argument(
-        "--cleanup", action="store_true", help="Apply --cleanup to all batch exports."
-    )
+    parser.add_argument("--optimize", action="store_true", help="Apply --optimize to all batch exports.")
+    parser.add_argument("--cleanup", action="store_true", help="Apply --cleanup to all batch exports.")
     parser.add_argument(
         "--prune-canonical",
         dest="prune_canonical",
@@ -136,8 +127,7 @@ def _load_export_policy(config_path):
         yaml = __import__("yaml")
     except Exception as exc:
         raise RuntimeError(
-            "PyYAML is required for config-driven batch execution. "
-            "Install runtime dependencies from requirements-prod.txt."
+            "PyYAML is required for config-driven batch execution. " "Install runtime dependencies from requirements-prod.txt."
         ) from exc
 
     try:
@@ -147,9 +137,7 @@ def _load_export_policy(config_path):
         raise RuntimeError(f"Export policy config not found: {config_path}") from exc
 
     if not isinstance(data, dict):
-        raise RuntimeError(
-            f"Export policy config must be a YAML mapping at top level: {config_path}"
-        )
+        raise RuntimeError(f"Export policy config must be a YAML mapping at top level: {config_path}")
     return data
 
 
@@ -177,9 +165,7 @@ def _get_batch_preset(name, config_path):
         available = ", ".join(sorted(presets.keys())) or "<none>"
         raise RuntimeError(f"Unknown batch preset '{name}'. Available presets: {available}")
     if not isinstance(preset, list):
-        raise RuntimeError(
-            f"Batch preset '{name}' must be a list of export entries in {config_path}"
-        )
+        raise RuntimeError(f"Batch preset '{name}' must be a list of export entries in {config_path}")
     return preset
 
 
@@ -217,10 +203,7 @@ def _write_memory_status(context):
     mem = _get_memory_status()
     if mem is None:
         return
-    print(
-        f"[{context}] RAM: {mem['used_gb']}GB used / {mem['total_gb']}GB total "
-        f"({mem['free_gb']}GB free, {mem['free_percent']}%)"
-    )
+    print(f"[{context}] RAM: {mem['used_gb']}GB used / {mem['total_gb']}GB total " f"({mem['free_gb']}GB free, {mem['free_percent']}%)")
 
 
 def _memory_available(min_free_gb):

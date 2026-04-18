@@ -1,7 +1,13 @@
+# =============================================================================
+# File: test_math_utils.py
+# Date: 2026-04-18
+# Copyright (c) 2026 Goutam Malakar.
+# SPDX-License-Identifier: Apache-2.0
+# =============================================================================
+
 import numpy as np
 
 from model_exporter.validation.math_utils import compare_arrays, mean_pooling, rowwise_cosine
-
 
 
 def test_mean_pooling_respects_attention_mask():
@@ -18,7 +24,6 @@ def test_mean_pooling_respects_attention_mask():
     np.testing.assert_allclose(pooled, np.array([[2.0, 2.0]], dtype=np.float32))
 
 
-
 def test_compare_arrays_reports_shape_mismatch():
     ref = np.zeros((2, 3), dtype=np.float32)
     onnx_arr = np.zeros((2, 4), dtype=np.float32)
@@ -30,7 +35,6 @@ def test_compare_arrays_reports_shape_mismatch():
         "ref_shape": (2, 3),
         "onnx_shape": (2, 4),
     }
-
 
 
 def test_rowwise_cosine_returns_one_for_identical_rows():

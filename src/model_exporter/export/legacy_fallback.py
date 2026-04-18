@@ -41,11 +41,7 @@ def _prepare_clone_source(export_source: str, logger: Any) -> tuple[Optional[str
             return tmp_dir, None
 
         repo_to_clone = export_source
-        if (
-            "/" in export_source
-            and not export_source.startswith("http://")
-            and not export_source.startswith("https://")
-        ):
+        if "/" in export_source and not export_source.startswith("http://") and not export_source.startswith("https://"):
             repo_to_clone = f"https://huggingface.co/{export_source}"
 
         subprocess.check_call(["git", "clone", "--depth", "1", repo_to_clone, tmp_dir])

@@ -18,19 +18,14 @@ import time
 from contextlib import contextmanager
 from typing import Any, Iterator, List, Optional, cast
 
-from model_exporter.export.helpers import (
-    cleanup_validator_logging_handlers,
-    is_pid_running,
-)
+from model_exporter.export.helpers import cleanup_validator_logging_handlers, is_pid_running
 from model_exporter.utils.helpers import get_logger, safe_log
 from model_exporter.validation.invoker import invoke_validator
 
 logger: Any = get_logger(__name__)
 
 
-def _build_expected_list(
-    model_for: str, use_cache: bool, task: str | None = None, merge: bool = False
-) -> List[str]:
+def _build_expected_list(model_for: str, use_cache: bool, task: str | None = None, merge: bool = False) -> List[str]:
     """Compute the list of expected ONNX artifact filenames for an export.
 
     For seq2seq models the encoder and decoder files are always included;
@@ -321,20 +316,14 @@ def _requires_trust_remote_code_fast(model_name: str, token: str | None = None) 
         return any(t in msg for t in triggers)
 
 
-def _write_validation_marker(
-    output_dir: str, rc: int, model_name: str, is_post_opt: bool = False
-) -> bool:
+def _write_validation_marker(output_dir: str, rc: int, model_name: str, is_post_opt: bool = False) -> bool:
     """Write validation failure marker file. Returns True if successful."""
     try:
         prefix = "post_optimization_" if is_post_opt else ""
         marker = os.path.join(output_dir, ".validation_failed")
         with open(marker, "w", encoding="utf-8") as mf:
-            mf.write(
-                f"{prefix}validation_failed: rc={rc} ts={int(time.time())} model={model_name}\n"
-            )
-        marker_desc = (
-            "post-optimization validation failure" if is_post_opt else "validation failure"
-        )
+            mf.write(f"{prefix}validation_failed: rc={rc} ts={int(time.time())} model={model_name}\n")
+        marker_desc = "post-optimization validation failure" if is_post_opt else "validation failure"
         logger.info(f"Wrote {marker_desc} marker: %s", marker)
         return True
     except Exception:
@@ -406,11 +395,7 @@ def _setup_hf_token(token: str | None, kwargs: dict, logger: Any) -> tuple[str |
     flags = {"set_hf": False, "set_hub": False, "login_ok": False}
 
     if not token:
-        token = (
-            os.environ.get("HF_TOKEN")
-            or os.environ.get("HUGGINGFACE_HUB_TOKEN")
-            or os.environ.get("HUGGINGFACE_TOKEN")
-        )
+        token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN")
 
     if token:
         try:
@@ -451,9 +436,7 @@ def _teardown_hf_token(flags: dict, logger: Any) -> None:
     try:
         if not flags.get("login_ok", False):
             for env_var in ["HF_TOKEN", "HUGGINGFACE_HUB_TOKEN"]:
-                if (env_var == "HF_TOKEN" and flags.get("set_hf")) or (
-                    env_var == "HUGGINGFACE_HUB_TOKEN" and flags.get("set_hub")
-                ):
+                if (env_var == "HF_TOKEN" and flags.get("set_hf")) or (env_var == "HUGGINGFACE_HUB_TOKEN" and flags.get("set_hub")):
                     try:
                         if env_var in os.environ:
                             del os.environ[env_var]
@@ -630,9 +613,7 @@ def _resolve_use_cache(model_name: str, model_for: str, task: str | None, logger
     return use_cache
 
 
-def _auto_resolve_trust_remote_code(
-    model_name: str, token: Optional[str], trust_remote_code: bool, logger: Any
-) -> bool:
+def _auto_resolve_trust_remote_code(model_name: str, token: Optional[str], trust_remote_code: bool, logger: Any) -> bool:
     """Auto-enable trust_remote_code when the model config requires it.
 
     If ``trust_remote_code`` is already True, returns True immediately.
@@ -652,7 +633,8 @@ def _auto_resolve_trust_remote_code(
     try:
         if _requires_trust_remote_code_fast(model_name, token):
             logger.info(
-                "Auto-enabling trust_remote_code for %s based on quick check", model_name
+                "Auto-enabling trust_remote_code for %s based on quick check",
+                model_name,
             )
             return True
     except Exception:
@@ -717,19 +699,42 @@ def _run_quantization_step(
                     if quantize_dynamic is not None and QuantType is not None:
                         try:
                             dst = os.path.join(root, fname.replace(".onnx", ".dynamic-int8.onnx"))
-                            safe_log(logger, "info", "Quantizing (dynamic int8): %s -> %s", src, dst)
+                            safe_log(
+                                logger,
+                                "info",
+                                "Quantizing (dynamic int8): %s -> %s",
+                                src,
+                                dst,
+                            )
                             quantize_dynamic(src, dst, weight_type=QuantType.QInt8)
                             safe_log(logger, "info", "Dynamic int8 artifact written: %s", dst)
                         except Exception as q_e:
-                            safe_log(logger, "warning", "Dynamic quantization failed for %s: %s", src, q_e)
+                            safe_log(
+                                logger,
+                                "warning",
+                                "Dynamic quantization failed for %s: %s",
+                                src,
+                                q_e,
+                            )
                     else:
-                        safe_log(logger, "warning", "quantize_dynamic not available; skipping dynamic_int8 for %s", src)
+                        safe_log(
+                            logger,
+                            "warning",
+                            "quantize_dynamic not available; skipping dynamic_int8 for %s",
+                            src,
+                        )
 
                 if "fp16" in qtypes:
                     if convert_float_to_float16 is not None:
                         try:
                             dst16 = os.path.join(root, fname.replace(".onnx", ".fp16.onnx"))
-                            safe_log(logger, "info", "Converting to FP16: %s -> %s", src, dst16)
+                            safe_log(
+                                logger,
+                                "info",
+                                "Converting to FP16: %s -> %s",
+                                src,
+                                dst16,
+                            )
                             try:
                                 convert_float_to_float16(src, dst16)
                             except TypeError:
@@ -739,9 +744,20 @@ def _run_quantization_step(
                                 cast(_onnx_mod, Any).save(model_proto, dst16)
                             safe_log(logger, "info", "FP16 artifact written: %s", dst16)
                         except Exception as fp_e:
-                            safe_log(logger, "warning", "FP16 conversion failed for %s: %s", src, fp_e)
+                            safe_log(
+                                logger,
+                                "warning",
+                                "FP16 conversion failed for %s: %s",
+                                src,
+                                fp_e,
+                            )
                     else:
-                        safe_log(logger, "warning", "FP16 converter not available; skipping FP16 for %s", src)
+                        safe_log(
+                            logger,
+                            "warning",
+                            "FP16 converter not available; skipping FP16 for %s",
+                            src,
+                        )
     except Exception:
         safe_log(logger, "debug", "Quantization step failed", exc_info=True)
 

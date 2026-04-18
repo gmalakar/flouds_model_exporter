@@ -47,7 +47,7 @@ If trusted publishing is not configured, the PyPI publish job will fail while Gi
 In PyPI, open your project settings and add a new trusted publisher with:
 
 - Owner: your GitHub org or username (for example `goutam-malakar`)
-- Repository name: `FloudsModelExporter`
+- Repository name: `flouds_model_exporter`
 - Workflow name: `Release`
 - Workflow file path: `.github/workflows/release.yml`
 - Environment name: leave empty unless you intentionally use a GitHub Environment gate

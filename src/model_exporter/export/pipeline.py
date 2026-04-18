@@ -4,7 +4,7 @@
 # Copyright (c) 2026 Goutam Malakar.
 # SPDX-License-Identifier: Apache-2.0
 # =============================================================================
-"""Public export API for FloudsModelExporter.
+"""Public export API for flouds_model_exporter.
 
 This module provides the single public entry-point
 :func:`export`.  All private helpers have been split
@@ -41,10 +41,7 @@ from model_exporter.export.pipeline_helpers import (
     _should_skip_validator,
     _with_export_lock,
 )
-from model_exporter.export.pipeline_v2 import (
-    _run_export_with_fallback,
-    _run_post_optimization_validator,
-)
+from model_exporter.export.pipeline_v2 import _run_export_with_fallback, _run_post_optimization_validator
 from model_exporter.utils.helpers import get_default_opset, get_logger
 from model_exporter.validation.checker import verify_models
 
@@ -180,9 +177,7 @@ def export(
     # and attempt to login for the session. If login fails (invalid token),
     # remove any env vars we set and continue anonymously.
     try:
-        token: Optional[str] = kwargs.pop("hf_token", None) or kwargs.pop(
-            "huggingface_hub_token", None
-        )
+        token: Optional[str] = kwargs.pop("hf_token", None) or kwargs.pop("huggingface_hub_token", None)
     except Exception:
         token = None
 
@@ -249,9 +244,7 @@ def export(
     # Determine whether to log to file (opt-in; default False) and pass to setup_export_logging
     log_to_file = kwargs.pop("log_to_file", False)
     try:
-        file_handler, logfile_fd, old_stdout, old_stderr, logfile_path = setup_export_logging(
-            BASE_DIR, safe_model, rev_tag, logger, log_to_file
-        )
+        file_handler, logfile_fd, old_stdout, old_stderr, logfile_path = setup_export_logging(BASE_DIR, safe_model, rev_tag, logger, log_to_file)
     except Exception:
         logger.warning("Failed to initialize per-run logging; continuing without file capture")
 
@@ -259,9 +252,7 @@ def export(
 
     try:
         # Skip export if outputs exist and no force requested
-        all_exist: bool = all(
-            os.path.exists(os.path.join(_output_dir, fname)) for fname in expected
-        )
+        all_exist: bool = all(os.path.exists(os.path.join(_output_dir, fname)) for fname in expected)
         if all_exist and not force:
             logger.info(
                 "All expected ONNX files already exist in %s — skipping export (use --force to re-export)",
@@ -306,11 +297,7 @@ def export(
             # LLM export, prepare a local tied-weights copy to stabilize ONNX
             # initializer naming. Place it under onnx/tmp_export/<model_folder>-local.
             try:
-                if (
-                    _model_for == "llm"
-                    and not os.path.exists(str(model_name))
-                    and not bool(no_local_prep)
-                ):
+                if _model_for == "llm" and not os.path.exists(str(model_name)) and not bool(no_local_prep):
                     from model_exporter.export.helpers import prepare_local_model_dir
 
                     # Prepare the transient local copy inside the model folder
@@ -343,11 +330,7 @@ def export(
                         export_source = tmp_p
                         prep_tmp_p = tmp_p
                         logger.info("Using prepared local model for export: %s", tmp_p)
-                elif (
-                    _model_for == "llm"
-                    and not os.path.exists(str(model_name))
-                    and bool(no_local_prep)
-                ):
+                elif _model_for == "llm" and not os.path.exists(str(model_name)) and bool(no_local_prep):
                     logger.info("Skipping local prep for LLM as requested by --no-local-prep")
             except Exception:
                 logger.debug(
@@ -519,18 +502,14 @@ def export(
                 else:
                     try:
                         optimize_if_encoder: Optional[Callable[..., int]] = None
-                        from model_exporter.export.optimizer import (
-                            optimize_if_encoder as _optimize_if_encoder,
-                        )
+                        from model_exporter.export.optimizer import optimize_if_encoder as _optimize_if_encoder
 
                         optimize_if_encoder = _optimize_if_encoder
                     except Exception:
                         optimize_if_encoder = None
 
                     if optimize_if_encoder is None:
-                        logger.warning(
-                            "optimize_if_encoder helper not available; skipping optimization"
-                        )
+                        logger.warning("optimize_if_encoder helper not available; skipping optimization")
                         rc_post = 0
                     else:
                         rc_post = int(
@@ -562,9 +541,7 @@ def export(
                                     pack_single_file=pack_single_file,
                                     pack_single_threshold_mb=pack_single_threshold_mb,
                                     trust_remote_code=trust_remote_code,
-                                    used_trust_remote=(
-                                        "used_trust_remote" in locals() and used_trust_remote
-                                    ),
+                                    used_trust_remote=("used_trust_remote" in locals() and used_trust_remote),
                                     normalize_embeddings=normalize_embeddings,
                                     logger=logger,
                                     skip_validator=skip_validator,
@@ -583,9 +560,7 @@ def export(
         try:
             cleanup_extraneous_onnx_files: Optional[Callable[..., None]] = None
             try:
-                from model_exporter.export.helpers import (
-                    cleanup_extraneous_onnx_files as _cleanup_extraneous_onnx_files,
-                )
+                from model_exporter.export.helpers import cleanup_extraneous_onnx_files as _cleanup_extraneous_onnx_files
 
                 cleanup_extraneous_onnx_files = _cleanup_extraneous_onnx_files
             except Exception:

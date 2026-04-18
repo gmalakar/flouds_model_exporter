@@ -67,7 +67,11 @@ class Tee:
 
 
 def setup_export_logging(
-    base_dir: str, safe_model: str, rev_tag: str, logger: logging.Logger, log_to_file: bool = False
+    base_dir: str,
+    safe_model: str,
+    rev_tag: str,
+    logger: logging.Logger,
+    log_to_file: bool = False,
 ) -> Tuple[Any, Any, Any, Any, Any]:
     """
     If `log_to_file` is True, log to file and print the log file path in terminal.
@@ -76,6 +80,7 @@ def setup_export_logging(
     """
     import os
     import time
+
     file_handler = None
     logfile_fd = None
     old_stdout = sys.stdout
@@ -87,9 +92,7 @@ def setup_export_logging(
         logs_dir.mkdir(parents=True, exist_ok=True)
         ts = time.strftime("%Y%m%d-%H%M%S")
         logfile = logs_dir / f"{safe_model}_{rev_tag}_{ts}.log"
-        file_handler = logging.handlers.RotatingFileHandler(
-            str(logfile), maxBytes=20 * 1024 * 1024, backupCount=5, encoding="utf-8"
-        )
+        file_handler = logging.handlers.RotatingFileHandler(str(logfile), maxBytes=20 * 1024 * 1024, backupCount=5, encoding="utf-8")
         fmt = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
         file_handler.setFormatter(fmt)
         env = os.getenv("FLOUDS_API_ENV", "").strip()

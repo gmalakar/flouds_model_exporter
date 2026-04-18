@@ -22,10 +22,7 @@ from typing import Any, Callable, List, Optional
 
 from model_exporter.export.helpers import cleanup_temporary_export_artifacts
 from model_exporter.export.legacy_fallback import run_legacy_v1_fallback
-from model_exporter.export.pipeline_helpers import (
-    _remove_validation_marker,
-    _write_validation_marker,
-)
+from model_exporter.export.pipeline_helpers import _remove_validation_marker, _write_validation_marker
 from model_exporter.export.subprocess_runner import _run_main_export_subprocess
 from model_exporter.utils.helpers import get_default_opset, get_logger, safe_log
 from model_exporter.validation.checker import verify_models
@@ -101,9 +98,7 @@ def _load_transformers_components(
         model = None
 
     if model is None and tokenizer is None:
-        raise RuntimeError(
-            f"Fallback ONNX export failed: could not load model or tokenizer for {model_name}"
-        )
+        raise RuntimeError(f"Fallback ONNX export failed: could not load model or tokenizer for {model_name}")
 
     # Load config optionally (with the same retry-on-trust behavior)
     safe_log(
@@ -203,9 +198,7 @@ def export_onnx_fallback(me_kwargs: dict[str, Any]) -> None:
     tokenizer: Any
     model: Any
     config: Any
-    tokenizer, model, config = _load_transformers_components(
-        model_name, trust_remote_code, token, lg
-    )
+    tokenizer, model, config = _load_transformers_components(model_name, trust_remote_code, token, lg)
 
     # Patch config with expected attributes for optimum
     _patch_config_for_optimum(config, model_name, lg)
@@ -229,9 +222,7 @@ def export_onnx_fallback(me_kwargs: dict[str, Any]) -> None:
     }
 
     # Filter only supported parameters and non-None values
-    filtered: dict[str, Any] = {
-        k: v for k, v in candidate.items() if k in sig.parameters and v is not None
-    }
+    filtered: dict[str, Any] = {k: v for k, v in candidate.items() if k in sig.parameters and v is not None}
 
     # Try full export, then minimal fallback
     safe_log(
@@ -330,12 +321,7 @@ def _prepare_strategy(
                 else:
                     repo_to_clone = repo
                     try:
-                        if (
-                            ("/" in repo)
-                            and (not repo.startswith("http://"))
-                            and (not repo.startswith("https://"))
-                            and (not os.path.exists(repo))
-                        ):
+                        if ("/" in repo) and (not repo.startswith("http://")) and (not repo.startswith("https://")) and (not os.path.exists(repo)):
                             repo_to_clone = f"https://huggingface.co/{repo}"
                     except Exception:
                         repo_to_clone = repo
@@ -505,9 +491,7 @@ def _patch_config_for_optimum(config: Any, model_name: str, logger: Any) -> None
     )
 
 
-def _setup_working_directory(
-    output_dir: str, use_external_data_format: bool, logger: Any
-) -> tuple[str, Optional[str]]:
+def _setup_working_directory(output_dir: str, use_external_data_format: bool, logger: Any) -> tuple[str, Optional[str]]:
     """Setup working directory for Windows long-path scenarios.
 
     Returns (working_output, child_tmp).
@@ -530,9 +514,7 @@ def _setup_working_directory(
                     different_device = False
 
                 if (len(abs_out) > threshold) or different_device:
-                    child_tmp = _tempfile.mkdtemp(
-                        prefix="onnx_working_", dir=_tempfile.gettempdir()
-                    )
+                    child_tmp = _tempfile.mkdtemp(prefix="onnx_working_", dir=_tempfile.gettempdir())
                     working_output = child_tmp
                     safe_log(
                         logger,
@@ -547,9 +529,7 @@ def _setup_working_directory(
     return working_output, child_tmp
 
 
-def _build_fallback_strategies(
-    err: str, trust_remote_code: bool
-) -> list[tuple[str, dict[str, Any]]]:
+def _build_fallback_strategies(err: str, trust_remote_code: bool) -> list[tuple[str, dict[str, Any]]]:
     """Build prioritized fallback strategies based on error patterns.
 
     Returns list of (name, kwargs) tuples.
@@ -710,19 +690,13 @@ def _attempt_inprocess_export(
                                             }
                                         )
                                     else:
-                                        threshold_gb = float(
-                                            me_kwargs.get("large_model_threshold_gb", 3.0)
-                                        )
+                                        threshold_gb = float(me_kwargs.get("large_model_threshold_gb", 3.0))
                                         threshold_bytes = int(threshold_gb * 1024**3)
 
                                         total_size = 0
                                         try:
                                             model_path = me_kwargs.get("model_name_or_path")
-                                            if (
-                                                isinstance(model_path, str)
-                                                and os.path.exists(model_path)
-                                                and os.path.isdir(model_path)
-                                            ):
+                                            if isinstance(model_path, str) and os.path.exists(model_path) and os.path.isdir(model_path):
                                                 for _root, _dirs, files in os.walk(model_path):
                                                     for fname in files:
                                                         try:
@@ -761,7 +735,7 @@ def _attempt_inprocess_export(
                                                 logger,
                                                 "debug",
                                                 "Model size %.2f GB < %.2f GB; skipping large-export flags",
-                                                total_size / (1024**3) if total_size else 0.0,
+                                                (total_size / (1024**3) if total_size else 0.0),
                                                 threshold_gb,
                                             )
                                 except Exception:
@@ -795,9 +769,7 @@ def _attempt_inprocess_export(
                                         repr(e_main),
                                     )
                                 except Exception:
-                                    logger.error(
-                                        "In-process main_export raised an exception (repr failed)"
-                                    )
+                                    logger.error("In-process main_export raised an exception (repr failed)")
 
                                 try:
                                     safe_log(
@@ -916,9 +888,7 @@ def _execute_fallback_loop(
                 fb_kwargs,
             )
 
-            me_try, cleanup, prep_err = _prepare_strategy(
-                me_kwargs, fb_name, fb_kwargs, export_source, logger
-            )
+            me_try, cleanup, prep_err = _prepare_strategy(me_kwargs, fb_name, fb_kwargs, export_source, logger)
             if me_try is None:
                 safe_log(logger, "info", "Skipping fallback '%s': %s", fb_name, prep_err)
                 continue
@@ -1039,9 +1009,7 @@ def export_v2_main_export(
     if no_post_process:
         me_kwargs["no_post_process"] = True
 
-    working_output, child_tmp = _setup_working_directory(
-        output_dir, use_external_data_format, logger
-    )
+    working_output, child_tmp = _setup_working_directory(output_dir, use_external_data_format, logger)
     if working_output != output_dir:
         me_kwargs["output"] = working_output
 
@@ -1070,9 +1038,7 @@ def export_v2_main_export(
         me_kwargs["trust_remote_code"] = True
 
     try:
-        ok, stderr, child_tmp = _attempt_inprocess_export(
-            me_kwargs, working_output, output_dir, child_tmp, logger
-        )
+        ok, stderr, child_tmp = _attempt_inprocess_export(me_kwargs, working_output, output_dir, child_tmp, logger)
 
         if not use_subprocess:
             if ok:
@@ -1131,9 +1097,7 @@ def export_v2_main_export(
     finally:
         try:
             prefixes = ("onnx_out_", "onnx_export_", "onnx_opt_clone_", "onnx_working_")
-            cleanup_temporary_export_artifacts(
-                logger=logger, prefixes=prefixes, max_age_seconds=300
-            )
+            cleanup_temporary_export_artifacts(logger=logger, prefixes=prefixes, max_age_seconds=300)
         except Exception:
             safe_log(logger, "debug", "Fallback export temp cleanup failed", exc_info=True)
 
@@ -1324,9 +1288,7 @@ def _run_export_with_fallback(
         if export_succeeded:
             sanitize_onnx_initializers: Optional[Callable[..., int]] = None
             try:
-                from model_exporter.export.helpers import (
-                    sanitize_onnx_initializers as _sanitize_onnx_initializers,
-                )
+                from model_exporter.export.helpers import sanitize_onnx_initializers as _sanitize_onnx_initializers
 
                 sanitize_onnx_initializers = _sanitize_onnx_initializers
             except Exception:

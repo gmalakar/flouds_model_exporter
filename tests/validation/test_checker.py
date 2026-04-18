@@ -1,3 +1,10 @@
+# =============================================================================
+# File: test_checker.py
+# Date: 2026-04-18
+# Copyright (c) 2026 Goutam Malakar.
+# SPDX-License-Identifier: Apache-2.0
+# =============================================================================
+
 import importlib
 import json
 import sys
@@ -7,7 +14,6 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 
-
 def import_checker_module(monkeypatch) -> Any:
     fake_onnx = cast(Any, types.ModuleType("onnx"))
     fake_onnx.checker = SimpleNamespace(check_model=lambda *args, **kwargs: None)
@@ -15,7 +21,6 @@ def import_checker_module(monkeypatch) -> Any:
     monkeypatch.setitem(sys.modules, "onnx", fake_onnx)
     sys.modules.pop("model_exporter.validation.checker", None)
     return importlib.import_module("model_exporter.validation.checker")
-
 
 
 def test_safe_check_model_prefers_path_checker_for_external_data(monkeypatch, tmp_path):
@@ -38,7 +43,6 @@ def test_safe_check_model_prefers_path_checker_for_external_data(monkeypatch, tm
 
     assert ok is True
     assert info == "ok"
-
 
 
 def test_verify_models_discovers_onnx_files_when_expected_are_missing(monkeypatch, tmp_path):

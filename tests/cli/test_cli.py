@@ -1,7 +1,13 @@
+# =============================================================================
+# File: test_cli.py
+# Date: 2026-04-18
+# Copyright (c) 2026 Goutam Malakar.
+# SPDX-License-Identifier: Apache-2.0
+# =============================================================================
+
 import textwrap
 
 import pytest
-
 
 
 def test_direct_flags_mode_uses_canonical_cli_names(cli_module, monkeypatch, tmp_path):
@@ -35,7 +41,6 @@ def test_direct_flags_mode_uses_canonical_cli_names(cli_module, monkeypatch, tmp
     assert captured["onnx_path"] == str(onnx_dir)
 
 
-
 def test_export_subcommand_forwards_to_export_pipeline(cli_module, monkeypatch, tmp_path):
     module, captured = cli_module
     onnx_dir = tmp_path / "onnx-output"
@@ -62,7 +67,6 @@ def test_export_subcommand_forwards_to_export_pipeline(cli_module, monkeypatch, 
     assert captured["onnx_path"] == str(onnx_dir)
 
 
-
 def test_batch_subcommand_runs_recommended_preset(cli_module, monkeypatch, tmp_path):
     module, captured = cli_module
     onnx_dir = tmp_path / "onnx-output"
@@ -74,7 +78,6 @@ def test_batch_subcommand_runs_recommended_preset(cli_module, monkeypatch, tmp_p
     assert captured["calls"][0]["model_name"] == "BAAI/bge-base-en-v1.5"
     assert captured["calls"][1]["model_name"] == "cross-encoder/ms-marco-MiniLM-L-12-v2"
     assert captured["calls"][0]["onnx_path"] == str(onnx_dir)
-
 
 
 def test_batch_subcommand_loads_custom_config(cli_module, tmp_path):
@@ -118,7 +121,6 @@ def test_batch_subcommand_loads_custom_config(cli_module, tmp_path):
     assert captured["calls"][0]["optimize"] is True
 
 
-
 def test_validate_subcommand_forwards_to_validator(cli_module):
     module, captured = cli_module
 
@@ -153,7 +155,6 @@ def test_validate_subcommand_forwards_to_validator(cli_module):
         "0.01",
         "--normalize-embeddings",
     ]
-
 
 
 def test_optimize_subcommand_forwards_to_optimizer(cli_module):

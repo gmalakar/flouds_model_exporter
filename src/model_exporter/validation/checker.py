@@ -92,17 +92,13 @@ def _import_real_onnx() -> tuple[Any, Any]:
     if candidate_file:
         spec = importlib.util.spec_from_file_location("onnx_installed", candidate_file)
         if spec is None or spec.loader is None:
-            raise ModuleNotFoundError(
-                f"Could not create a module spec from candidate file: {candidate_file}"
-            )
+            raise ModuleNotFoundError(f"Could not create a module spec from candidate file: {candidate_file}")
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         if hasattr(mod, "checker") and hasattr(mod, "load"):
             return mod.checker, mod.load
 
-    raise ModuleNotFoundError(
-        "Could not import a usable 'onnx' package from the active interpreter site-packages."
-    )
+    raise ModuleNotFoundError("Could not import a usable 'onnx' package from the active interpreter site-packages.")
 
 
 checker: Any
@@ -284,7 +280,7 @@ except Exception as e:
 # Try to import helpers but tolerate absence
 create_ort_session: Optional[Callable[..., Any]] = None
 _get_preferred_provider: Any = None  # Callable[..., str]
-_has_external_data: Optional[Callable[..., bool]] = None
+_has_external_data = None  # type: Optional[Callable[..., bool]]
 
 try:
     from exporter.utils.onnx_utils import has_external_data as _has_external_data
@@ -386,9 +382,7 @@ def verify_models(
 
     if not available_fnames:
         try:
-            discovered = [
-                os.path.basename(p) for p in glob.glob(os.path.join(output_dir, "*.onnx"))
-            ]
+            discovered = [os.path.basename(p) for p in glob.glob(os.path.join(output_dir, "*.onnx"))]
         except Exception:
             discovered = []
         if discovered:
@@ -422,9 +416,7 @@ def verify_models(
                     sess = create_ort_session(path, provider=provider)
                     inputs = [i.name for i in sess.get_inputs()]
                     outputs = [o.name for o in sess.get_outputs()]
-                    print(
-                        f"{fname} verified via ONNX Runtime fallback inputs={inputs} outputs={outputs}"
-                    )
+                    print(f"{fname} verified via ONNX Runtime fallback inputs={inputs} outputs={outputs}")
                     # Write a fallback marker so callers know this file was validated
                     # via ONNX Runtime rather than the ONNX checker.
                     try:
@@ -457,17 +449,13 @@ def verify_models(
             try:
                 # Load model only when needed (external data detection / repack)
                 onnx_model = load(path)
-                external_used = (
-                    has_external_data(onnx_model) if callable(has_external_data) else False
-                )
+                external_used = has_external_data(onnx_model) if callable(has_external_data) else False
             except Exception as e:
                 print(f"Failed to load or inspect model for external data for {fname}: {e}")
                 external_used = False
 
             if external_used:
-                print(
-                    f"Warning: Model {fname} uses external_data tensors. Ensure associated tensor files are co-located."
-                )
+                print(f"Warning: Model {fname} uses external_data tensors. Ensure associated tensor files are co-located.")
                 if pack_single:
                     tmp_single = f"{path}.single"
                     # Prefer official helper, fall back if not present

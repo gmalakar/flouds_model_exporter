@@ -98,11 +98,7 @@ if get_preferred_provider_fn is None:
 
 from model_exporter.utils.diagnostics import collect_diagnostics  # noqa: E402
 from model_exporter.validation.math_utils import l2_normalize  # noqa: E402
-from model_exporter.validation.math_utils import (  # noqa: E402
-    compare_arrays,
-    mean_pooling,
-    rowwise_cosine,
-)
+from model_exporter.validation.math_utils import compare_arrays, mean_pooling, rowwise_cosine  # noqa: E402
 
 
 def _to_numpy(v: Any) -> Any:
@@ -296,10 +292,7 @@ def build_onnx_inputs(sess: Any, tokenizer_outputs: dict[str, Any]) -> dict[str,
                 sole = next(iter(tokenizer_outputs.values()))
                 inputs[name] = _to_numpy(sole)
             else:
-                raise KeyError(
-                    f"Could not map ONNX input '{name}' to tokenizer outputs: "
-                    f"keys={list(tokenizer_outputs.keys())}"
-                )
+                raise KeyError(f"Could not map ONNX input '{name}' to tokenizer outputs: " f"keys={list(tokenizer_outputs.keys())}")
 
     # Adjust attention mask for cached past sequences
     try:
@@ -415,9 +408,7 @@ def main(argv: List[str] | None = None) -> int:
             )
         except TypeError:
             # Older transformers do not accept the kwarg; fall back.
-            tokenizer = AutoTokenizer.from_pretrained(
-                reference_model, use_fast=True, trust_remote_code=args.trust_remote_code
-            )
+            tokenizer = AutoTokenizer.from_pretrained(reference_model, use_fast=True, trust_remote_code=args.trust_remote_code)
     except Exception:
         # Propagate original exception to caller
         raise
@@ -501,13 +492,9 @@ def main(argv: List[str] | None = None) -> int:
             print("ONNX checker warning:", e)
 
         try:
-            external_used = (
-                has_external_data_fn(onnx_model) if callable(has_external_data_fn) else False
-            )
+            external_used = has_external_data_fn(onnx_model) if callable(has_external_data_fn) else False
             if external_used:
-                print(
-                    "Warning: model uses external_data tensors. Ensure associated tensor files are co-located with the model."
-                )
+                print("Warning: model uses external_data tensors. Ensure associated tensor files are co-located with the model.")
         except Exception:
             print("Could not determine external_data usage for model")
     except Exception as e:
@@ -631,11 +618,7 @@ def main(argv: List[str] | None = None) -> int:
                     results[key] = best_cmp[1]
                     _align_map[key] = best_cmp[2]
                     try:
-                        max_abs = (
-                            best_cmp[1].get("max_abs_diff", None)
-                            if isinstance(best_cmp[1], dict)
-                            else None
-                        )
+                        max_abs = best_cmp[1].get("max_abs_diff", None) if isinstance(best_cmp[1], dict) else None
                     except Exception:
                         max_abs = None
                     per_output_stats.append((key, best_cmp[0], max_abs, cos_mean))
@@ -669,9 +652,7 @@ def main(argv: List[str] | None = None) -> int:
     # embeddings from token outputs).
     try:
         existing = results.get("sentence_embedding")
-        if "sentence_embedding" not in results or (
-            isinstance(existing, dict) and existing.get("max_abs_diff", float("inf")) > float("inf")
-        ):
+        if "sentence_embedding" not in results or (isinstance(existing, dict) and existing.get("max_abs_diff", float("inf")) > float("inf")):
             # noop — placeholder to keep structure
             pass
     except Exception:
@@ -705,11 +686,7 @@ def main(argv: List[str] | None = None) -> int:
                     if isinstance(attention_mask, np.ndarray):
                         am = attention_mask
                     else:
-                        am = (
-                            attention_mask.cpu().numpy()
-                            if hasattr(attention_mask, "cpu")
-                            else np.array(attention_mask)
-                        )
+                        am = attention_mask.cpu().numpy() if hasattr(attention_mask, "cpu") else np.array(attention_mask)
                 except Exception:
                     am = np.ones(tok_ref_arr.shape[:2], dtype=np.int32)
 
@@ -737,11 +714,7 @@ def main(argv: List[str] | None = None) -> int:
                             (
                                 "pooled_mean_l2",
                                 pr_l2,
-                                (
-                                    pooled_onx_l2
-                                    if pooled_onx_l2 is not None
-                                    else l2_normalize(pooled_onx)
-                                ),
+                                (pooled_onx_l2 if pooled_onx_l2 is not None else l2_normalize(pooled_onx)),
                             )
                         )
                     except Exception:
@@ -761,9 +734,7 @@ def main(argv: List[str] | None = None) -> int:
                 for name, a, b in candidates:
                     try:
                         cmp = compare_arrays(a, b)
-                        if not best or cmp.get("max_abs_diff", float("inf")) < best.get(
-                            "max_abs_diff", float("inf")
-                        ):
+                        if not best or cmp.get("max_abs_diff", float("inf")) < best.get("max_abs_diff", float("inf")):
                             best = cmp
                             best_name = name
                             best_pair = (a, b)
@@ -778,9 +749,7 @@ def main(argv: List[str] | None = None) -> int:
                         replace = True
                     elif isinstance(existing, dict) and not existing.get("shape_mismatch", False):
                         try:
-                            if best.get("max_abs_diff", float("inf")) < existing.get(
-                                "max_abs_diff", float("inf")
-                            ):
+                            if best.get("max_abs_diff", float("inf")) < existing.get("max_abs_diff", float("inf")):
                                 replace = True
                         except Exception:
                             pass
@@ -824,10 +793,7 @@ def main(argv: List[str] | None = None) -> int:
         print("Validation: FAIL (exceeds tolerances).")
 
         if args.skip_diagnostics:
-            print(
-                "Skipping diagnostic collection (--skip-diagnostics enabled). "
-                "Rerun without flag to collect dumps."
-            )
+            print("Skipping diagnostic collection (--skip-diagnostics enabled). " "Rerun without flag to collect dumps.")
             return 2
 
         print("Collecting diagnostic dumps...")

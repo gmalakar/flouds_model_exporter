@@ -13,4 +13,3 @@ mypy==1.8.0
 types-requests
 types-protobuf
 bandit==1.7.5
-

@@ -40,8 +40,7 @@ def log_memory_status(context: str = "Memory", level: int = logging.INFO) -> Non
     mem = get_memory_info()
     logger.log(
         level,
-        f"[{context}] RAM: {mem['used_gb']}GB used / {mem['total_gb']}GB total "
-        f"({mem['free_gb']}GB free, {mem['percent_used']}% used)",
+        f"[{context}] RAM: {mem['used_gb']}GB used / {mem['total_gb']}GB total " f"({mem['free_gb']}GB free, {mem['percent_used']}% used)",
     )
 
 
@@ -120,10 +119,7 @@ def memory_guard(min_free_gb: float = 2.0, auto_cleanup: bool = True) -> bool:
             logger.info("Memory cleanup successful, continuing operation")
             return True
         else:
-            logger.error(
-                f"Insufficient memory even after cleanup. "
-                f"Available: {get_memory_info()['free_gb']}GB, Required: {min_free_gb}GB"
-            )
+            logger.error(f"Insufficient memory even after cleanup. " f"Available: {get_memory_info()['free_gb']}GB, Required: {min_free_gb}GB")
             return False
 
     return False
@@ -168,9 +164,7 @@ class MemoryMonitor:
 
         return self
 
-    def __exit__(
-        self, exc_type: object | None, exc_val: object | None, exc_tb: object | None
-    ) -> None:
+    def __exit__(self, exc_type: object | None, exc_val: object | None, exc_tb: object | None) -> None:
         """Log end memory, report the delta, and run aggressive cleanup.
 
         Args:
@@ -185,10 +179,7 @@ class MemoryMonitor:
         start_used = self.start_memory["used_gb"] if self.start_memory is not None else 0
         delta = end_memory["used_gb"] - start_used
         if abs(delta) > 0.1:  # Only log if significant change
-            logger.info(
-                f"{self.operation_name} memory delta: {delta:+.2f}GB "
-                f"({start_used:.2f}GB → {end_memory['used_gb']:.2f}GB)"
-            )
+            logger.info(f"{self.operation_name} memory delta: {delta:+.2f}GB " f"({start_used:.2f}GB → {end_memory['used_gb']:.2f}GB)")
 
         # Cleanup after operation
         aggressive_cleanup()

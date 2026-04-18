@@ -53,9 +53,7 @@ def _add_export_arguments(parser):
             " or 'llm' (causal-lm). Allowed values: fe, s2s, sc, llm, ranker (default: fe)"
         ),
     )
-    parser.add_argument(
-        "--optimize", action="store_true", help="Whether to optimize the ONNX model"
-    )
+    parser.add_argument("--optimize", action="store_true", help="Whether to optimize the ONNX model")
     parser.add_argument(
         "--optimization-level",
         dest="optimization_level",
@@ -69,9 +67,7 @@ def _add_export_arguments(parser):
         required=True,
         help="Export task (e.g., seq2seq-lm, sequence-classification, feature-extraction) (required)",
     )
-    parser.add_argument(
-        "--model-folder", dest="model_folder", help="HuggingFace model folder or path"
-    )
+    parser.add_argument("--model-folder", dest="model_folder", help="HuggingFace model folder or path")
     parser.add_argument(
         "--onnx-path",
         dest="onnx_path",
@@ -104,9 +100,7 @@ def _add_export_arguments(parser):
         action="store_true",
         help="Skip numeric ONNX validation (do not run validate_onnx_model).",
     )
-    parser.add_argument(
-        "--force", action="store_true", help="Force re-export even if ONNX files exist"
-    )
+    parser.add_argument("--force", action="store_true", help="Force re-export even if ONNX files exist")
     parser.add_argument(
         "--opset-version",
         dest="opset_version",
@@ -126,10 +120,7 @@ def _add_export_arguments(parser):
         type=str,
         default=None,
         choices=["dynamic_int8", "fp16", "both"],
-        help=(
-            "Optional quantization to produce post-export variants. "
-            "Choices: 'dynamic_int8', 'fp16', or 'both'."
-        ),
+        help=("Optional quantization to produce post-export variants. " "Choices: 'dynamic_int8', 'fp16', or 'both'."),
     )
     parser.add_argument(
         "--pack-single-file",
@@ -280,13 +271,9 @@ def _execute_export_kwargs(unified_kwargs, parser):
             ]
             invalid = [k for k in unified_kwargs.keys() if k not in allowed]
             if invalid:
-                reason = (
-                    "Possible typos or use of removed underscore-style aliases. "
-                    "Check flag names and use hyphenated forms."
-                )
+                reason = "Possible typos or use of removed underscore-style aliases. " "Check flag names and use hyphenated forms."
                 parser.error(
-                    f"Invalid parameter name(s) passed to exporter: {', '.join(invalid)}. "
-                    f"Allowed parameters: {', '.join(allowed)}. {reason}"
+                    f"Invalid parameter name(s) passed to exporter: {', '.join(invalid)}. " f"Allowed parameters: {', '.join(allowed)}. {reason}"
                 )
     except Exception:
         pass

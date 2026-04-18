@@ -114,19 +114,13 @@ def configure_protobuf() -> None:
         msg_cls = cast(Any, gp_msg.Message)
         if hasattr(msg_cls, "_SetGlobalDefaultMaxMessageSize"):
             msg_cls._SetGlobalDefaultMaxMessageSize(2**31 - 1)
-            logging.getLogger(__name__).info(
-                "Protobuf message size limit set using _SetGlobalDefaultMaxMessageSize"
-            )
+            logging.getLogger(__name__).info("Protobuf message size limit set using _SetGlobalDefaultMaxMessageSize")
         elif hasattr(msg_cls, "SetGlobalDefaultMaxMessageSize"):
             msg_cls.SetGlobalDefaultMaxMessageSize(2**31 - 1)
-            logging.getLogger(__name__).info(
-                "Protobuf message size limit set using SetGlobalDefaultMaxMessageSize"
-            )
+            logging.getLogger(__name__).info("Protobuf message size limit set using SetGlobalDefaultMaxMessageSize")
         else:
             os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION_VERSION"] = "2"
-            logging.getLogger(__name__).warning(
-                "Using environment variable fallback for protobuf configuration"
-            )
+            logging.getLogger(__name__).warning("Using environment variable fallback for protobuf configuration")
     except Exception as e:
         logging.getLogger(__name__).warning("Could not configure protobuf message size: %s", e)
         os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION_VERSION"] = "2"
@@ -144,11 +138,7 @@ def cleanup_validator_logging_handlers() -> None:
         for h in list(root.handlers):
             try:
                 name = getattr(h, "name", "") or ""
-                if (
-                    isinstance(h, logging.FileHandler)
-                    or "onnx" in name.lower()
-                    or "validator" in name.lower()
-                ):
+                if isinstance(h, logging.FileHandler) or "onnx" in name.lower() or "validator" in name.lower():
                     try:
                         root.removeHandler(h)
                     except Exception:
@@ -480,13 +470,7 @@ def cleanup_extraneous_onnx_files(
                 # Prune single-file model canonical only if a non-encoder/decoder
                 # merged `model` artifact exists (avoid matching encoder/decoder)
                 has_model_merged = any(
-                    (
-                        "model" in f.lower()
-                        and "merged" in f.lower()
-                        and "encoder" not in f.lower()
-                        and "decoder" not in f.lower()
-                    )
-                    for f in files
+                    ("model" in f.lower() and "merged" in f.lower() and "encoder" not in f.lower() and "decoder" not in f.lower()) for f in files
                 )
                 if has_model_merged and "model.onnx" in keep_set:
                     keep_set.discard("model.onnx")
@@ -511,12 +495,8 @@ def cleanup_extraneous_onnx_files(
                     if (
                         _has_optimized_variant("model")
                         and "model.onnx" in keep_set
-                        and not any(
-                            k for k in files if "encoder" in k.lower() and "optimized" in k.lower()
-                        )
-                        and not any(
-                            k for k in files if "decoder" in k.lower() and "optimized" in k.lower()
-                        )
+                        and not any(k for k in files if "encoder" in k.lower() and "optimized" in k.lower())
+                        and not any(k for k in files if "decoder" in k.lower() and "optimized" in k.lower())
                     ):
                         keep_set.discard("model.onnx")
                 except Exception:
@@ -706,9 +686,7 @@ def cleanup_temporary_export_artifacts(
                 # Remove directory with Windows-specific error handling
                 try:
 
-                    def _on_rm_error(
-                        func: Callable[..., Any], p: str | os.PathLike, exc_info: Any
-                    ) -> None:
+                    def _on_rm_error(func: Callable[..., Any], p: str | os.PathLike, exc_info: Any) -> None:
                         """Windows-specific handler for read-only/permission errors."""
                         try:
                             os.chmod(p, stat.S_IWRITE)
@@ -717,9 +695,7 @@ def cleanup_temporary_export_artifacts(
                                 import ctypes
 
                                 FILE_ATTRIBUTE_NORMAL = 0x80
-                                ctypes.windll.kernel32.SetFileAttributesW(
-                                    str(p), FILE_ATTRIBUTE_NORMAL
-                                )
+                                ctypes.windll.kernel32.SetFileAttributesW(str(p), FILE_ATTRIBUTE_NORMAL)
                             except Exception:
                                 pass
                         try:
@@ -779,9 +755,7 @@ def cleanup_temporary_export_artifacts(
         )
 
 
-def prepare_local_model_dir(
-    model_name: str, dest_dir: str, trust_remote_code: bool, logger: Any
-) -> bool:
+def prepare_local_model_dir(model_name: str, dest_dir: str, trust_remote_code: bool, logger: Any) -> bool:
     """Prepare a local copy of `model_name` under `dest_dir`.
 
     Loads the model with reduced memory flags where supported, calls the
@@ -838,11 +812,7 @@ def prepare_local_model_dir(
             # a local snapshot of the repo and retry with trust_remote_code=True.
             try:
                 low_msg = msg.lower()
-                if (
-                    "model type" in low_msg
-                    or "does not recognize" in low_msg
-                    or "not recognize" in low_msg
-                ):
+                if "model type" in low_msg or "does not recognize" in low_msg or "not recognize" in low_msg:
                     try:
                         from huggingface_hub import snapshot_download
                     except Exception as e:
@@ -888,9 +858,7 @@ def prepare_local_model_dir(
                             local_files_only=False,
                         )
                     except Exception as snap_exc:
-                        logger.exception(
-                            "Snapshot download failed for %s: %s", model_name, snap_exc
-                        )
+                        logger.exception("Snapshot download failed for %s: %s", model_name, snap_exc)
                         try:
                             import shutil as _sh
 
@@ -915,9 +883,7 @@ def prepare_local_model_dir(
                             )
                             used_local_snapshot = True
                         except TypeError:
-                            model = AutoModelForCausalLM.from_pretrained(
-                                tmp_snap, trust_remote_code=True
-                            )
+                            model = AutoModelForCausalLM.from_pretrained(tmp_snap, trust_remote_code=True)
                         logger.info("Loaded model from local snapshot for %s", model_name)
                     except Exception as retry_exc:
                         logger.exception(
@@ -948,9 +914,7 @@ def prepare_local_model_dir(
                 model.tie_word_embeddings()
                 logger.info("tie_word_embeddings() completed")
             else:
-                logger.info(
-                    "Model has no tie_weights/tie_word_embeddings helper; skipping canonicalization"
-                )
+                logger.info("Model has no tie_weights/tie_word_embeddings helper; skipping canonicalization")
         except Exception as e:
             logger.exception("tie_weights/tie_word_embeddings failed during local prep: %s", e)
 
@@ -975,9 +939,7 @@ def prepare_local_model_dir(
                 # If they are not the same object, force them to reference the same
                 if emb is not lm:
                     try:
-                        logger.info(
-                            "Forcing lm_head.weight to reference input_embeddings.weight to canonicalize tied weights"
-                        )
+                        logger.info("Forcing lm_head.weight to reference input_embeddings.weight to canonicalize tied weights")
                         # Assign the existing embedding Parameter to the lm_head module
                         lm_mod.weight = emb
                         logger.info("Forced tie: lm_head.weight now shares input_embeddings.weight")
@@ -1028,18 +990,12 @@ def prepare_local_model_dir(
             trc_for_tok = trust_remote_code or used_local_snapshot
             tok = None
             try:
-                tok = AutoTokenizer.from_pretrained(
-                    dest_dir, use_fast=False, trust_remote_code=trc_for_tok
-                )
+                tok = AutoTokenizer.from_pretrained(dest_dir, use_fast=False, trust_remote_code=trc_for_tok)
             except Exception:
                 try:
-                    tok = AutoTokenizer.from_pretrained(
-                        model_name, use_fast=False, trust_remote_code=trc_for_tok
-                    )
+                    tok = AutoTokenizer.from_pretrained(model_name, use_fast=False, trust_remote_code=trc_for_tok)
                 except TypeError:
-                    tok = AutoTokenizer.from_pretrained(
-                        model_name, use_fast=False, trust_remote_code=trc_for_tok
-                    )
+                    tok = AutoTokenizer.from_pretrained(model_name, use_fast=False, trust_remote_code=trc_for_tok)
             if tok is not None:
                 tok.save_pretrained(dest_dir)
                 logger.info("Saved tokenizer to %s", dest_dir)

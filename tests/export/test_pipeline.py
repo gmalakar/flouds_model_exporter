@@ -1,3 +1,10 @@
+# =============================================================================
+# File: test_pipeline.py
+# Date: 2026-04-18
+# Copyright (c) 2026 Goutam Malakar.
+# SPDX-License-Identifier: Apache-2.0
+# =============================================================================
+
 import importlib
 import logging
 import sys
@@ -5,7 +12,6 @@ import types
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
-
 
 
 def import_pipeline_module(monkeypatch) -> Any:
@@ -16,7 +22,13 @@ def import_pipeline_module(monkeypatch) -> Any:
     fake_validation_invoker = cast(Any, types.ModuleType("model_exporter.validation.invoker"))
     fake_validation_checker = cast(Any, types.ModuleType("model_exporter.validation.checker"))
 
-    fake_config_logging.setup_export_logging = lambda *args, **kwargs: (None, None, None, None, None)
+    fake_config_logging.setup_export_logging = lambda *args, **kwargs: (
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
     fake_config_logging.teardown_export_logging = lambda *args, **kwargs: None
 
     fake_export_helpers.cleanup_temporary_export_artifacts = lambda *args, **kwargs: None
@@ -24,7 +36,10 @@ def import_pipeline_module(monkeypatch) -> Any:
     fake_export_helpers.configure_protobuf = lambda: None
     fake_export_helpers.is_pid_running = lambda pid: False
 
-    fake_subprocess_runner._run_main_export_subprocess = lambda *args, **kwargs: (True, "")
+    fake_subprocess_runner._run_main_export_subprocess = lambda *args, **kwargs: (
+        True,
+        "",
+    )
 
     fake_utils_helpers.get_default_opset = lambda default=17: default
     fake_utils_helpers.get_logger = logging.getLogger
@@ -44,14 +59,16 @@ def import_pipeline_module(monkeypatch) -> Any:
     return importlib.import_module("model_exporter.export.pipeline")
 
 
-
 def test_build_expected_list_handles_seq2seq_with_past(monkeypatch):
     pipeline = import_pipeline_module(monkeypatch)
 
     expected = pipeline._build_expected_list("s2s", use_cache=True, task="text2text-generation-with-past")
 
-    assert expected == ["encoder_model.onnx", "decoder_model.onnx", "decoder_with_past_model.onnx"]
-
+    assert expected == [
+        "encoder_model.onnx",
+        "decoder_model.onnx",
+        "decoder_with_past_model.onnx",
+    ]
 
 
 def test_should_skip_validator_for_multi_file_seq2seq(monkeypatch):
@@ -66,7 +83,6 @@ def test_should_skip_validator_for_multi_file_seq2seq(monkeypatch):
     assert should_skip is True
 
 
-
 def test_optimize_if_encoder_skips_decoder_only_models():
     from model_exporter.export.optimizer import optimize_if_encoder
 
@@ -78,7 +94,6 @@ def test_optimize_if_encoder_skips_decoder_only_models():
     )
 
     assert rc == 0
-
 
 
 def test_run_main_export_subprocess_returns_success_and_stderr(monkeypatch, tmp_path):
@@ -95,7 +110,10 @@ def test_run_main_export_subprocess_returns_success_and_stderr(monkeypatch, tmp_
     monkeypatch.setattr("model_exporter.export.subprocess_runner.subprocess.run", fake_run)
 
     output_dir = tmp_path / "export-output"
-    result = _run_main_export_subprocess({"output": str(output_dir), "task": "feature-extraction"}, logging.getLogger("test"))
+    result = _run_main_export_subprocess(
+        {"output": str(output_dir), "task": "feature-extraction"},
+        logging.getLogger("test"),
+    )
 
     assert result == (True, "")
     assert run_calls["timeout"] == 3600

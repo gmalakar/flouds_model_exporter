@@ -1,6 +1,6 @@
 # Library Cheatsheet
 
-Use this guide to identify the libraries that are relevant to FloudsModelExporter and how they are used.
+Use this guide to identify the libraries that are relevant to flouds_model_exporter and how they are used.
 
 ## Runtime Dependencies
 

@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for your interest in contributing to FloudsModelExporter.
+Thanks for your interest in contributing to flouds_model_exporter.
 
 ## Ground rules
 

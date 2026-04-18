@@ -1,28 +1,16 @@
-## Production / runtime requirements
+## Production / runtime requirements (pruned to core runtime set)
 # Install with: pip install -r requirements-prod.txt
-sentence-transformers>=3.0.0
-transformers==4.57.6
-# Use PyTorch wheel index for platform-specific torch builds when needed.
---extra-index-url https://download.pytorch.org/whl/cpu
-torch>=2.9.0
 
-# ONNX + Optimum
+# Core ML / export libraries
+transformers>=4.44.0,<4.58.0
 onnx==1.16.1
-onnxruntime>=1.24.1
+onnxruntime>=1.20.1
 optimum>=1.22.0
 optimum-onnx[onnxruntime]>=0.1.0
 
-# Conversion helpers
-onnxconverter-common>=1.13.0
-
 # Supporting libraries
 numpy==1.26.4
-huggingface_hub>=0.34.0,<1.0
+huggingface_hub[hf_xet]>=0.34.0,<1.0
 psutil==5.9.8
-accelerate==0.27.2
-safetensors>=0.4.3
-sentencepiece==0.2.0
-einops==0.6.0
 protobuf>=4.25.3
-fsspec<=2025.10.0
 PyYAML>=6.0

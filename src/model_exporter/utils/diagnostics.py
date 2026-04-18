@@ -77,11 +77,7 @@ def collect_diagnostics(
             if key in tok_out:
                 val = tok_out[key]
                 try:
-                    arr = (
-                        val.cpu().numpy()
-                        if hasattr(val, "cpu")
-                        else (val.numpy() if hasattr(val, "numpy") else np.array(val))
-                    )
+                    arr = val.cpu().numpy() if hasattr(val, "cpu") else (val.numpy() if hasattr(val, "numpy") else np.array(val))
                 except Exception:
                     try:
                         arr = np.array(val)
@@ -128,11 +124,7 @@ def collect_diagnostics(
             am = attention_mask
         else:
             try:
-                am = (
-                    attention_mask.cpu().numpy()
-                    if hasattr(attention_mask, "cpu")
-                    else np.array(attention_mask)
-                )
+                am = attention_mask.cpu().numpy() if hasattr(attention_mask, "cpu") else np.array(attention_mask)
             except Exception:
                 am = np.ones(ref_token_embeddings.shape[:2], dtype=np.int32)
 
@@ -178,9 +170,7 @@ def collect_diagnostics(
             ppath = os.path.join(dump_dir, "token_embeddings_mean_cosine.npy")
             if os.path.exists(ppath):
                 pc = np.load(ppath)
-                summary_lines.append(
-                    f"Pooled token cosine mean/min/max: {float(pc.mean()):.6f}/{float(pc.min()):.6f}/{float(pc.max()):.6f}"
-                )
+                summary_lines.append(f"Pooled token cosine mean/min/max: {float(pc.mean()):.6f}/{float(pc.min()):.6f}/{float(pc.max()):.6f}")
         except Exception:
             pass
 

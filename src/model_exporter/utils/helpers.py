@@ -76,9 +76,7 @@ def get_default_opset(default: int = 17) -> int:
     return default
 
 
-def create_ort_session(
-    path: str, provider: Optional[str] = None, retries: int = 2, backoff: float = 1.0
-) -> Any:
+def create_ort_session(path: str, provider: Optional[str] = None, retries: int = 2, backoff: float = 1.0) -> Any:
     """Create an ONNX Runtime InferenceSession with simple retry/backoff.
 
     Args:
