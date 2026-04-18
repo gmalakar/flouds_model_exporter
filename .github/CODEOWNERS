@@ -1,0 +1,8 @@
+# Default code ownership
+* @goutam-malakar
+
+# CI and repository governance
+/.github/ @goutam-malakar
+
+# Core exporter package
+/exporter/ @goutam-malakar

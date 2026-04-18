@@ -1,0 +1,138 @@
+# =============================================================================
+# Git ignore file for Flouds AI
+# Prevents sensitive and generated files from being committed
+# =============================================================================
+
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+*.pyd
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+.venv/
+.smoke-venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+pyvenv.cfg
+.conda/
+.venv311/
+conda-meta/
+# Environment and configuration files
+.env
+.env.*
+*.env
+.envrc
+appsettings.development.json
+appsettings.*.json
+!appsettings.json
+
+# IDE and editor files
+.idea/
+.vscode/
+.vs/
+*.swp
+*.swo
+*~
+.spyderproject
+.spyproject
+.ropeproject
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+coverage.*
+htmlcov/
+.tox/
+.nox/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Logs and temporary files
+*.log
+logs/
+*.tmp
+*.bak
+*.old
+*.orig
+*.rej
+
+# ML models and data
+onnx/
+checkpoints/
+*.onnx
+*.pb
+*.pth
+*.pt
+*.h5
+*.hdf5
+*.pkl
+*.bin
+*.safetensors
+
+# OS-specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Jupyter notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# Documentation builds
+docs/_build/
+site/
+docs/MODEL_EXPORT_COMPLETE_FLOW.docx
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Profiling
+.prof
+*.prof
+
+# Scripts and utilities
+clean_proj.bat
+scripts/
+
+# Node.js (if any frontend)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Backup files
+*.backup
+*.bkp

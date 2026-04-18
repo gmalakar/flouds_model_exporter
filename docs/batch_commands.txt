@@ -1,0 +1,12 @@
+# One export command per line (new hyphenated style only).
+# Lines beginning with # are ignored.
+
+# -------------------------
+# Embedding Models (fe)
+# -------------------------
+flouds-export export --model-name BAAI/bge-base-en-v1.5 --model-for fe --task feature-extraction --library transformers --normalize-embeddings
+
+# -------------------------
+# Rankers
+# -------------------------
+flouds-export export --model-name cross-encoder/ms-marco-MiniLM-L-12-v2 --model-for ranker --task sequence-classification --library transformers --optimize

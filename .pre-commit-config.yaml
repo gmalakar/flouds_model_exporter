@@ -1,0 +1,90 @@
+repos:
+  # Code formatting with Black
+  - repo: https://github.com/psf/black
+    rev: 24.1.1
+    hooks:
+      - id: black
+        language_version: python3
+        args: ['--line-length=150']
+
+  # Import sorting with isort
+  - repo: https://github.com/PyCQA/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        args: ['--profile', 'black', '--line-length=150']
+
+  # Linting with flake8
+  - repo: https://github.com/PyCQA/flake8
+    rev: 7.0.0
+    hooks:
+      - id: flake8
+        args: [
+          '--max-line-length=150',
+          '--extend-ignore=E203,W503,E501',
+          '--exclude=.git,__pycache__,.venv,build,dist,add_header.py'
+        ]
+        additional_dependencies:
+          - flake8-bugbear
+          - flake8-comprehensions
+
+  # Type checking with mypy
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.8.0
+    hooks:
+      - id: mypy
+        args: [
+          '--ignore-missing-imports',
+          '--no-implicit-optional',
+          '--warn-redundant-casts',
+          '--warn-unused-ignores',
+          '--disallow-incomplete-defs'
+        ]
+        additional_dependencies:
+          - types-requests
+        exclude: ^(tests/|scripts/)
+
+  # Security scanning with bandit
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.5
+    hooks:
+      - id: bandit
+        args: ['-ll', '--exclude', 'tests/']
+        additional_dependencies:
+          - pbr
+        exclude: ^(tests/|scripts/)
+
+  # YAML validation and general checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: debug-statements
+      - id: detect-private-key
+
+  # Local custom hooks
+  - repo: local
+    hooks:
+      - id: add-header
+        name: Add copyright header
+        entry: python add_header.py
+        language: system
+        files: \.py$
+      - id: pre-push-tests
+        name: Run tests and type checks on push
+        entry: python tools/pre_push_checks.py
+        language: system
+        stages: [pre-push]
+
+default_language_version:
+  python: python3
+
+default_stages: [pre-commit]
+
+exclude: '^(\.venv|__pycache__|\.git|\.idea|\.pytest_cache|build|dist|\.egg-info)'

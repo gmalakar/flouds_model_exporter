@@ -1,0 +1,144 @@
+batch_presets:
+  full:
+    # Embedding Models (fe)
+    - model_name: nomic-ai/nomic-embed-text-v1.5
+      model_for: fe
+      task: feature-extraction
+      library: transformers
+      opset_version: 18
+      trust_remote_code: true
+      normalize_embeddings: true
+      quantize: dynamic_int8
+      skip: true
+    - model_name: BAAI/bge-base-en-v1.5
+      model_for: fe
+      task: feature-extraction
+      library: transformers
+      normalize_embeddings: true
+    - model_name: BAAI/bge-large-en-v1.5
+      model_for: fe
+      task: feature-extraction
+      library: transformers
+      normalize_embeddings: true
+      skip: true
+    - model_name: BAAI/bge-small-en-v1.5
+      model_for: fe
+      task: feature-extraction
+      library: transformers
+      normalize_embeddings: true
+      skip: true
+    - model_name: sentence-transformers/all-MiniLM-L6-v2
+      model_for: fe
+      task: feature-extraction
+      library: transformers
+      normalize_embeddings: true
+      skip: true
+    - model_name: sentence-transformers/all-mpnet-base-v2
+      model_for: fe
+      task: feature-extraction
+      library: transformers
+      normalize_embeddings: true
+      skip: true
+    - model_name: sentence-transformers/paraphrase-MiniLM-L6-v2
+      model_for: fe
+      task: feature-extraction
+      library: transformers
+      normalize_embeddings: true
+      skip: true
+    - model_name: intfloat/e5-small-v2
+      model_for: fe
+      task: feature-extraction
+      library: transformers
+      normalize_embeddings: true
+      skip: true
+    - model_name: BAAI/bge-m3
+      model_for: fe
+      task: feature-extraction
+      library: transformers
+      skip: true
+    - model_name: thenlper/gte-small
+      model_for: fe
+      task: feature-extraction
+      library: transformers
+      skip: true
+    # Meta / Facebook embedding models
+    - model_name: facebook/contriever
+      model_for: fe
+      task: feature-extraction
+      library: transformers
+      normalize_embeddings: true
+      skip: true
+    # Seq2Seq
+    - model_name: t5-small
+      model_for: s2s
+      task: seq2seq-lm
+      library: transformers
+      skip: true
+    - model_name: t5-base
+      model_for: s2s
+      task: seq2seq-lm
+      library: transformers
+      skip: true
+    - model_name: Flan-T5-base
+      model_for: s2s
+      task: seq2seq-lm
+      library: transformers
+      skip: true
+    - model_name: Flan-T5-Small
+      model_for: s2s
+      task: seq2seq-lm
+      library: transformers
+      skip: true
+    - model_name: facebook/bart-large-cnn
+      model_for: s2s
+      task: seq2seq-lm
+      pack_single_file: true
+      library: transformers
+      opset_version: 18
+      skip: true
+    # LLMs
+    - model_name: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+      model_for: llm
+      task: text-generation-with-past
+      library: transformers
+      opset_version: 18
+      merge: true
+      skip: true
+    - model_name: Qwen/Qwen2.5-Coder-1.5B
+      model_for: llm
+      task: text-generation-with-past
+      library: transformers
+      opset_version: 18
+      merge: true
+      skip: true
+    - model_name: deepseek-ai/deepseek-coder-1.3b-instruct
+      model_for: llm
+      task: text-generation-with-past
+      library: transformers
+      merge: true
+      use_subprocess: true
+      skip: true
+    - model_name: microsoft/Phi-3.5-mini-instruct
+      model_for: llm
+      task: text-generation-with-past
+      library: transformers
+      trust_remote_code: true
+      merge: true
+      optimize: true
+      use_subprocess: true
+      low_memory_env: true
+      skip: true
+    - model_name: google/gemma-2b-it
+      model_for: llm
+      task: text-generation-with-past
+      library: transformers
+      trust_remote_code: true
+      merge: true
+      pack_single_file: true
+      skip: true
+    # Rankers
+    - model_name: cross-encoder/ms-marco-MiniLM-L-12-v2
+      model_for: ranker
+      task: sequence-classification
+      library: transformers
+      optimize: true
