@@ -1,0 +1,12 @@
+include README.md
+include LICENSE
+include CHANGELOG.md
+include pyproject.toml
+graft src/model_exporter
+prune tests
+prune tools
+prune EXAMPLES
+prune logs
+prune recovered
+global-exclude __pycache__
+global-exclude *.py[cod]
