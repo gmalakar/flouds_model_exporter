@@ -9,5 +9,7 @@ prune tools
 prune EXAMPLES
 prune logs
 prune recovered
+prune src/model_exporter/logs
+global-exclude *.log
 global-exclude __pycache__
 global-exclude *.py[cod]

@@ -280,10 +280,11 @@ except Exception as e:
 # Try to import helpers but tolerate absence
 create_ort_session: Optional[Callable[..., Any]] = None
 _get_preferred_provider: Any = None  # Callable[..., str]
-_has_external_data = None  # type: Optional[Callable[..., bool]]
-
 try:
-    from exporter.utils.onnx_utils import has_external_data as _has_external_data
+    import importlib
+
+    _mod = importlib.import_module("exporter.utils.onnx_utils")
+    _has_external_data = getattr(_mod, "has_external_data", None)
 except Exception:
     _has_external_data = None
 

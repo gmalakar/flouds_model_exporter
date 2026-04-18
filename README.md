@@ -30,7 +30,7 @@ pip install flouds-model-exporter
 git clone https://github.com/gmalakar/flouds_model_exporter.git
 cd flouds_model_exporter
 
-# Create a Python 3.11 through 3.14 virtual environment
+# Create a Python 3.11 or 3.12 virtual environment
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
