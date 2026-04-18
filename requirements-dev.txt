@@ -12,4 +12,4 @@ flake8-comprehensions
 mypy==1.8.0
 types-requests
 types-protobuf
-bandit==1.7.5
+bandit==1.9.4
