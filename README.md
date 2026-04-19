@@ -1,6 +1,5 @@
 [![PyPI Version](https://img.shields.io/pypi/v/flouds-model-exporter.svg)](https://pypi.org/project/flouds-model-exporter/)
 ![Python Versions](https://img.shields.io/pypi/pyversions/flouds-model-exporter.svg)
-[![Downloads](https://static.pepy.tech/badge/flouds-model-exporter)](https://pepy.tech/project/flouds-model-exporter)
 ![License](https://img.shields.io/pypi/l/flouds-model-exporter.svg)
 ![Build](https://github.com/gmalakar/flouds_model_exporter/actions/workflows/publish-pypi.yml/badge.svg)
 
