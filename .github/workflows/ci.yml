@@ -13,6 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+
   lint:
     runs-on: ubuntu-latest
     strategy:
@@ -35,6 +36,7 @@ jobs:
 
       - name: Run pre-commit
         run: pre-commit run --all-files --show-diff-on-failure
+
 
   tests:
     runs-on: ubuntu-latest
@@ -59,6 +61,7 @@ jobs:
       - name: Run tests
         run: pytest -q
 
+
   type-check:
     runs-on: ubuntu-latest
     strategy:
@@ -81,6 +84,7 @@ jobs:
 
       - name: Run mypy on package sources
         run: mypy src/model_exporter --ignore-missing-imports
+
 
   packaging-sanity:
     runs-on: ubuntu-latest
@@ -107,6 +111,7 @@ jobs:
 
       - name: Validate package metadata
         run: twine check dist/*
+
 
   docs-and-cli-sanity:
     runs-on: ubuntu-latest
