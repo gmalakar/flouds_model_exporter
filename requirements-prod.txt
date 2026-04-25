@@ -2,7 +2,7 @@
 # Install with: pip install -r requirements-prod.txt
 
 # Core ML / export libraries
-transformers>=4.44.0,<4.58.0
+transformers>=4.44.0,<5.7.0
 onnx==1.16.1
 onnxruntime>=1.20.1
 optimum>=1.22.0
