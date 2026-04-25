@@ -9,7 +9,7 @@ isort==5.13.2
 flake8==7.0.0
 flake8-bugbear
 flake8-comprehensions
-mypy==1.8.0
+mypy==1.20.2
 types-requests
 types-protobuf
 bandit==1.7.5
