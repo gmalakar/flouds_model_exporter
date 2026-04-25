@@ -24,7 +24,7 @@ classifiers = [
 ]
 dependencies = [
 	"transformers>=4.44.0,<4.58.0",
-	"onnx==1.16.1",
+	"onnx==1.21.0",
 	"onnxruntime>=1.20.1",
 	"optimum>=1.22.0",
 	"optimum-onnx[onnxruntime]>=0.1.0",
