@@ -11,7 +11,7 @@ on:
         required: false
         type: string
       publish_to_pypi:
-        description: "Publish package to PyPI using Trusted Publishing."
+        description: "Publish package to PyPI on manual runs using Trusted Publishing. Tag pushes publish automatically."
         required: false
         default: false
         type: boolean
@@ -30,6 +30,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref }}
 
       - name: Verify tag matches pyproject version
         shell: bash
@@ -65,6 +67,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -109,8 +113,9 @@ jobs:
   publish-pypi:
     runs-on: ubuntu-latest
     needs: build
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.publish_to_pypi == 'true'
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_to_pypi == 'true')
     permissions:
+      contents: read
       id-token: write
     steps:
       - name: Download distribution artifacts

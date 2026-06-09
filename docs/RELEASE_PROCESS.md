@@ -1,15 +1,15 @@
 # Release Process
 
-Use this guide to run tag-driven releases, validate versioning, and optionally publish to PyPI.
+Use this guide to run tag-driven releases, validate versioning, and publish to PyPI.
 
 ## Release Triggers
 
-- Push a semantic version tag (`vX.Y.Z`) to trigger the release workflow.
+- Push a semantic version tag (`vX.Y.Z`) to trigger the release workflow and publish to PyPI.
 - Or run the workflow manually from GitHub Actions (`workflow_dispatch`).
 
 Workflow file: `.github/workflows/release.yml`
 
-There is no separate PyPI publish workflow. GitHub Release creation and optional PyPI publishing both happen from `release.yml`.
+There is no separate PyPI publish workflow. GitHub Release creation and PyPI publishing both happen from `release.yml`.
 
 ## Standard Release Flow
 
@@ -24,7 +24,7 @@ git tag -a v0.1.1 -m "Release v0.1.1"
 git push origin v0.1.1
 ```
 
-6. Workflow builds `sdist` + `wheel`, validates metadata via `twine check`, uploads artifacts, and creates a GitHub Release.
+6. Workflow builds `sdist` + `wheel`, validates metadata via `twine check`, uploads artifacts, creates a GitHub Release, and publishes the package to PyPI.
 
 For tag-triggered releases, workflow validation enforces that tag `vX.Y.Z` exactly matches `project.version` in `pyproject.toml`.
 
@@ -34,15 +34,19 @@ If a release job needs to be re-run for an existing tag:
 
 1. Open Actions -> Release -> Run workflow.
 2. Set `tag` to the existing tag (for example `v0.1.1`).
+3. Set `publish_to_pypi=true` only if the version has not already been published to PyPI.
 
-## Optional PyPI Publish
+## PyPI Publish
 
-Manual workflow runs support optional publish to PyPI:
+Tag-triggered releases publish to PyPI automatically.
+
+Manual workflow runs can also publish to PyPI:
 
 - Set `publish_to_pypi=true` in the workflow input.
-- Configure PyPI Trusted Publisher for this GitHub repository/workflow.
+- Use this for an existing tag whose PyPI publish step did not run or failed before upload.
+- Do not try to republish a version that already exists on PyPI; PyPI rejects duplicate version uploads.
 
-If trusted publishing is not configured, the PyPI publish job will fail while GitHub Release creation still succeeds.
+Configure PyPI Trusted Publisher before tag pushes. If trusted publishing is not configured, the PyPI publish job will fail while GitHub Release creation can still succeed.
 
 ### PyPI Trusted Publisher Setup (Exact Fields)
 
@@ -57,7 +61,7 @@ In PyPI, open your project settings and add a new trusted publisher with:
 Recommended verification:
 
 1. Save trusted publisher settings in PyPI.
-2. Run `Release` workflow manually with `publish_to_pypi=true`.
+2. Push a new release tag, or run `Release` manually with `publish_to_pypi=true` for an unpublished existing tag.
 3. Confirm `publish-pypi` job succeeds and distribution appears in PyPI release history.
 
 ## Notes
