@@ -55,4 +55,4 @@ The format is based on Keep a Changelog.
 - Kept `.python-version` on 3.12 as the preferred local runtime while CI verifies both supported Python versions.
 - Release workflow now publishes to PyPI automatically on semantic version tag pushes when PyPI Trusted Publishing is configured.
 - Release workflow actions now use Node.js 24-compatible major versions, and manual release reruns validate the supplied tag.
-- PyPI publishing now uses the `pypi` GitHub environment to match Trusted Publisher claims.
+- PyPI publishing now uses the `flouds_by_goutam` GitHub environment to match Trusted Publisher claims.

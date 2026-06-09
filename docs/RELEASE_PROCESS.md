@@ -57,9 +57,9 @@ In PyPI, open your project settings and add a new trusted publisher with:
 - Owner: your GitHub org or username (for example `gmalakar`)
 - Repository name: `flouds_model_exporter`
 - Workflow filename: `release.yml`
-- Environment name: `pypi`
+- Environment name: `flouds_by_goutam`
 
-The GitHub workflow uses `environment: pypi` on the PyPI publishing job. The PyPI trusted publisher environment must match that value exactly.
+The GitHub workflow uses `environment: flouds_by_goutam` on the PyPI publishing job. The PyPI trusted publisher environment must match that value exactly.
 
 Recommended verification:
 
@@ -73,3 +73,4 @@ Recommended verification:
 - Prefer patch releases for bug fixes and minor releases for new features.
 - Ensure CLI examples in docs use canonical hyphenated flags.
 - Keep release workflow actions on Node.js 24-compatible major versions.
+- Keep the PyPI trusted publisher environment aligned with the release workflow's `publish-pypi` job environment.
