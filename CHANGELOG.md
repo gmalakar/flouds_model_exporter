@@ -54,3 +54,4 @@ The format is based on Keep a Changelog.
 - Aligned runtime support to Python 3.11 and 3.12 (`requires-python = ">=3.11,<3.13"`) and updated README/CI guidance accordingly.
 - Kept `.python-version` on 3.12 as the preferred local runtime while CI verifies both supported Python versions.
 - Release workflow now publishes to PyPI automatically on semantic version tag pushes when PyPI Trusted Publishing is configured.
+- Release workflow actions now use Node.js 24-compatible major versions, and manual release reruns validate the supplied tag.

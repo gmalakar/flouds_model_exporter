@@ -36,6 +36,8 @@ If a release job needs to be re-run for an existing tag:
 2. Set `tag` to the existing tag (for example `v0.1.1`).
 3. Set `publish_to_pypi=true` only if the version has not already been published to PyPI.
 
+Manual release runs also validate that the supplied tag matches `project.version` in `pyproject.toml`.
+
 ## PyPI Publish
 
 Tag-triggered releases publish to PyPI automatically.
@@ -69,3 +71,4 @@ Recommended verification:
 - Keep tags immutable after release.
 - Prefer patch releases for bug fixes and minor releases for new features.
 - Ensure CLI examples in docs use canonical hyphenated flags.
+- Keep release workflow actions on Node.js 24-compatible major versions.
