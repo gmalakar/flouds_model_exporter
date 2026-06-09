@@ -56,9 +56,10 @@ In PyPI, open your project settings and add a new trusted publisher with:
 
 - Owner: your GitHub org or username (for example `gmalakar`)
 - Repository name: `flouds_model_exporter`
-- Workflow name: `Release`
-- Workflow file path: `.github/workflows/release.yml`
-- Environment name: leave empty unless you intentionally use a GitHub Environment gate
+- Workflow filename: `release.yml`
+- Environment name: `pypi`
+
+The GitHub workflow uses `environment: pypi` on the PyPI publishing job. The PyPI trusted publisher environment must match that value exactly.
 
 Recommended verification:
 
