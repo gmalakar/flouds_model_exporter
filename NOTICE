@@ -1,0 +1,26 @@
+Flouds Model Exporter
+Copyright 2024-2026 Goutam Malakar
+
+This project is distributed under the Apache License, Version 2.0.
+
+This source distribution declares direct runtime dependencies on the following
+third-party Python packages. Those packages are distributed under their own
+licenses and are not bundled as source in this repository:
+
+- Transformers (Apache License 2.0)
+- ONNX (Apache License 2.0)
+- ONNX Runtime (MIT License)
+- Optimum (Apache License 2.0)
+- Optimum ONNX (Apache License 2.0)
+- NumPy (BSD 3-Clause License)
+- Hugging Face Hub (Apache License 2.0)
+- psutil (BSD 3-Clause License)
+- Protobuf (BSD 3-Clause License)
+- PyYAML (MIT License)
+
+Transitive dependencies and optional model-stack packages are governed by their
+own license terms. Downstream redistributors who bundle dependencies should
+include the corresponding third-party notices and license texts as required.
+
+See LICENSE for the full text of the Apache License 2.0 under which this
+project is distributed.

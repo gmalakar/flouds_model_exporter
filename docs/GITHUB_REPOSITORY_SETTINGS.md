@@ -17,12 +17,12 @@ Enable the following settings:
 
 ## Required Status Checks
 
-Mark these checks as required:
+Mark these checks as required. For matrix jobs, use the exact check names GitHub shows for each Python version.
 
-- `lint`
-- `tests`
-- `type-check`
-- `packaging-sanity`
+- `lint` for Python 3.11 and 3.12
+- `tests` for Python 3.11 and 3.12
+- `type-check` for Python 3.11 and 3.12
+- `packaging-sanity` for Python 3.11 and 3.12
 - `docs-and-cli-sanity`
 
 ## Merge Strategy
@@ -57,5 +57,5 @@ Repository-level Dependabot updates are configured in `.github/dependabot.yml`.
 In `Settings > Actions`:
 
 - Allow GitHub Actions and reusable workflows from verified creators
-- Restrict workflow permissions to least privilege (workflow already uses `contents: read`)
+- Restrict workflow permissions to least privilege. CI uses `contents: read`; release uses `contents: write`, and PyPI publishing uses OIDC `id-token: write`.
 - Require approval for first-time contributors (recommended)

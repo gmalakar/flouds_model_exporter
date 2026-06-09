@@ -2,26 +2,32 @@
 
 Use this guide to identify the libraries that are relevant to flouds_model_exporter and how they are used.
 
-## Runtime Dependencies
+## Declared Runtime Dependencies
+
+These are the direct runtime dependencies declared in `pyproject.toml` and mirrored in `requirements-prod.txt`.
 
 - `transformers`: model, tokenizer, and config loading.
-- `torch`: reference model execution and some fallback export paths.
-- `optimum`: primary ONNX export orchestration.
-- `optimum-onnx`: Optimum ONNX integration for export and runtime workflows.
 - `onnx`: model graph loading, inspection, and file rewriting.
 - `onnxruntime`: runtime validation, session creation, and quantization helpers.
-- `onnxconverter-common`: float16 conversion helpers.
+- `optimum`: primary ONNX export orchestration.
+- `optimum-onnx`: Optimum ONNX integration for export and runtime workflows.
 - `numpy`: array comparison, diagnostics, and validation math.
+- `huggingface_hub`: model download, metadata lookup, and authentication.
+- `psutil`: RAM inspection and memory-aware export decisions.
+- `protobuf`: ONNX and transformer serialization dependencies.
+- `PyYAML`: batch preset and export policy loading.
+
+## Optional Or Transitive Model-Stack Packages
+
+These packages may be pulled in by the Hugging Face stack or required by specific model families, but they are not declared as direct project dependencies here.
+
+- `torch`: reference model execution and PyTorch-based export paths.
 - `sentence-transformers`: some embedding-model export scenarios.
 - `sentencepiece`: tokenizer backend required by some Hugging Face models.
 - `safetensors`: safe tensor weight loading.
 - `einops`: tensor reshaping helpers used by some model families.
 - `accelerate`: compatibility support for large-model loading paths.
-- `huggingface_hub`: model download, metadata lookup, and authentication.
-- `psutil`: RAM inspection and memory-aware export decisions.
 - `fsspec`: filesystem abstraction used by model-loading stacks.
-- `protobuf`: ONNX and transformer serialization dependencies.
-- `PyYAML`: batch preset and export policy loading.
 
 ## Development and Test Tooling
 

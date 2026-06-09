@@ -31,14 +31,41 @@ try:
 except Exception:
     hf_hub_download = None
 
-try:
-    import onnxruntime as ort  # noqa: E402
-    import torch  # noqa: E402
-    from transformers import AutoModel, AutoTokenizer  # noqa: E402
-except Exception:
-    print("Missing required packages. Install the onnx loader requirements:")
-    print("  pip install -r requirements-prod.txt")
-    raise
+ort: Any = None
+torch: Any = None
+AutoModel: Any = None
+AutoModelForSequenceClassification: Any = None
+AutoTokenizer: Any = None
+
+
+def _ensure_runtime_dependencies() -> None:
+    """Import heavyweight validation dependencies only when validation runs."""
+    global AutoModel, AutoModelForSequenceClassification, AutoTokenizer, ort, torch
+    if (
+        ort is not None
+        and torch is not None
+        and AutoModel is not None
+        and AutoModelForSequenceClassification is not None
+        and AutoTokenizer is not None
+    ):
+        return
+    try:
+        import onnxruntime as _ort  # noqa: E402
+        import torch as _torch  # noqa: E402
+        from transformers import AutoModel as _AutoModel  # noqa: E402
+        from transformers import AutoModelForSequenceClassification as _AutoModelForSequenceClassification  # noqa: E402
+        from transformers import AutoTokenizer as _AutoTokenizer  # noqa: E402
+    except Exception as exc:
+        print("Missing required packages. Install the onnx loader requirements:")
+        print("  pip install -r requirements-prod.txt")
+        raise RuntimeError("Missing required validation runtime dependencies") from exc
+
+    ort = _ort
+    torch = _torch
+    AutoModel = _AutoModel
+    AutoModelForSequenceClassification = _AutoModelForSequenceClassification
+    AutoTokenizer = _AutoTokenizer
+
 
 # Prefer the shared import from `onnx_verify` to avoid duplicating import logic
 from model_exporter.validation.checker import checker, load  # noqa: E402
@@ -101,8 +128,14 @@ if get_preferred_provider_fn is None:
 
 
 from model_exporter.utils.diagnostics import collect_diagnostics  # noqa: E402
+from model_exporter.validation.math_utils import compare_arrays  # noqa: E402
 from model_exporter.validation.math_utils import l2_normalize  # noqa: E402
-from model_exporter.validation.math_utils import compare_arrays, mean_pooling, rowwise_cosine  # noqa: E402
+from model_exporter.validation.math_utils import (  # noqa: E402
+    comparisons_within_tolerance,
+    mean_pooling,
+    rowwise_cosine,
+    summarize_comparison_results,
+)
 
 
 def _to_numpy(v: Any) -> Any:
@@ -149,6 +182,17 @@ def _load_pooling_config(model_id: str) -> Dict[str, Any]:
             return json.load(pf)
     except Exception:
         return {}
+
+
+def _is_logits_output_name(name: str) -> bool:
+    """Return True when an ONNX output name looks like classifier logits."""
+    normalized = str(name).lower()
+    return normalized == "logits" or normalized.endswith(".logits") or "logits" in normalized
+
+
+def _output_names_include_logits(output_names: list[str]) -> bool:
+    """Return True when any ONNX output name should be compared as logits."""
+    return any(_is_logits_output_name(name) for name in output_names)
 
 
 def _resolve_onnx_input_name(name: str, tokenizer_outputs: dict, sess_inputs: List) -> str | None:
@@ -388,6 +432,7 @@ def main(argv: List[str] | None = None) -> int:
         ``0`` on success (within tolerance), ``2`` on validation failure, or
         ``3`` if the ONNX model file is missing.
     """
+    _ensure_runtime_dependencies()
     args = _parse_validation_args(argv)
 
     model_dir = args.model_dir
@@ -417,72 +462,7 @@ def main(argv: List[str] | None = None) -> int:
         # Propagate original exception to caller
         raise
 
-    print(f"Loading reference PyTorch model `{reference_model}` (this may download files)...")
-    ref_model = AutoModel.from_pretrained(reference_model, trust_remote_code=args.trust_remote_code)
-    ref_model.to(device)
-    ref_model.eval()
-
-    # Tokenize
-    tok_out = tokenizer(args.texts, padding=True, truncation=True, return_tensors="pt")
-    # Move to device
-    for k, v in list(tok_out.items()):
-        if isinstance(v, torch.Tensor):
-            tok_out[k] = v.to(device)
-
-    # Normalize and expose attention_mask early so it's always available
-    # later for pooling, diagnostics and saved dumps. Convert tensors to numpy.
-    attention_mask = tok_out.get("attention_mask")
-    try:
-        if isinstance(attention_mask, torch.Tensor):
-            attention_mask = attention_mask.cpu().numpy()
-    except Exception:
-        # leave as-is (could be None or numpy already)
-        pass
-
-    # Reference forward
-    with torch.no_grad():
-        ref_outputs = ref_model(**tok_out)
-
-    # Check for sentence-transformers pooling config in the model repo. If the
-    # repo indicates CLS-token pooling, prefer that pooling semantics when
-    # constructing reference sentence embeddings (some repos expose a pooler
-    # but still expect the sentence-transformer pooling behavior).
-    pool_cfg = _load_pooling_config(reference_model)
-    prefer_cls_pooling = pool_cfg.get("pooling_mode_cls_token", False)
-
-    # Interpret reference outputs
-    if hasattr(ref_outputs, "last_hidden_state"):
-        ref_token_embeddings = ref_outputs.last_hidden_state.cpu().numpy()
-    else:
-        # fallback: try first tensor-like output
-        first = ref_outputs[0]
-        ref_token_embeddings = first.cpu().numpy()
-
-    if prefer_cls_pooling:
-        # Repository indicates Sentence-Transformers CLS pooling; use CLS token
-        ref_sentence_embeddings = ref_token_embeddings[:, 0, :]
-    elif hasattr(ref_outputs, "pooler_output") and ref_outputs.pooler_output is not None:
-        ref_sentence_embeddings = ref_outputs.pooler_output.cpu().numpy()
-    else:
-        # mean pooling over token embeddings using attention mask
-        attention_mask = tok_out.get("attention_mask")
-        if attention_mask is None:
-            attention_mask = np.ones(ref_token_embeddings.shape[:2], dtype=np.int32)
-        else:
-            attention_mask = attention_mask.cpu().numpy()
-        # Try to honor Sentence-Transformers pooling config when available
-        ref_sentence_embeddings = None
-        pool_cfg = _load_pooling_config(reference_model)
-        if pool_cfg.get("pooling_mode_cls_token", False):
-            ref_sentence_embeddings = ref_token_embeddings[:, 0, :]
-        elif pool_cfg.get("pooling_mode_mean_tokens", False):
-            ref_sentence_embeddings = mean_pooling(ref_token_embeddings, attention_mask)
-
-        if ref_sentence_embeddings is None:
-            ref_sentence_embeddings = mean_pooling(ref_token_embeddings, attention_mask)
-
-    # Run ONNX
-    print(f"Running ONNX session on: {onnx_path}")
+    print(f"Preparing ONNX session on: {onnx_path}")
 
     # Pre-run verification similar to onnx_exporter._verify_models
     try:
@@ -512,6 +492,93 @@ def main(argv: List[str] | None = None) -> int:
     except Exception:
         sess = ort.InferenceSession(onnx_path, providers=["CPUExecutionProvider"])
 
+    output_names = [o.name for o in sess.get_outputs()]
+    prefer_logits = _output_names_include_logits(output_names)
+    reference_loader = AutoModelForSequenceClassification if prefer_logits else AutoModel
+    reference_kind = "sequence-classification" if prefer_logits else "base"
+
+    print(f"Loading reference PyTorch {reference_kind} model `{reference_model}` (this may download files)...")
+    try:
+        ref_model = reference_loader.from_pretrained(reference_model, trust_remote_code=args.trust_remote_code)
+    except Exception as exc:
+        if not prefer_logits:
+            raise
+        print("Could not load sequence-classification reference model; " f"falling back to base AutoModel: {exc}")
+        prefer_logits = False
+        ref_model = AutoModel.from_pretrained(reference_model, trust_remote_code=args.trust_remote_code)
+    ref_model.to(device)
+    ref_model.eval()
+
+    # Tokenize
+    tok_out = tokenizer(args.texts, padding=True, truncation=True, return_tensors="pt")
+    # Move to device
+    for k, v in list(tok_out.items()):
+        if isinstance(v, torch.Tensor):
+            tok_out[k] = v.to(device)
+
+    # Normalize and expose attention_mask early so it's always available
+    # later for pooling, diagnostics and saved dumps. Convert tensors to numpy.
+    attention_mask = tok_out.get("attention_mask")
+    try:
+        if isinstance(attention_mask, torch.Tensor):
+            attention_mask = attention_mask.cpu().numpy()
+    except Exception:
+        # leave as-is (could be None or numpy already)
+        pass
+
+    # Reference forward
+    with torch.no_grad():
+        ref_outputs = ref_model(**tok_out)
+
+    ref_logits = None
+    if hasattr(ref_outputs, "logits"):
+        ref_logits = ref_outputs.logits.cpu().numpy()
+
+    ref_token_embeddings = None
+    ref_sentence_embeddings = None
+
+    if ref_logits is None:
+        # Check for sentence-transformers pooling config in the model repo. If the
+        # repo indicates CLS-token pooling, prefer that pooling semantics when
+        # constructing reference sentence embeddings (some repos expose a pooler
+        # but still expect the sentence-transformer pooling behavior).
+        pool_cfg = _load_pooling_config(reference_model)
+        prefer_cls_pooling = pool_cfg.get("pooling_mode_cls_token", False)
+
+        # Interpret reference outputs
+        if hasattr(ref_outputs, "last_hidden_state"):
+            ref_token_embeddings = ref_outputs.last_hidden_state.cpu().numpy()
+        else:
+            # fallback: try first tensor-like output
+            first = ref_outputs[0]
+            ref_token_embeddings = first.cpu().numpy()
+
+        if prefer_cls_pooling:
+            # Repository indicates Sentence-Transformers CLS pooling; use CLS token
+            ref_sentence_embeddings = ref_token_embeddings[:, 0, :]
+        elif hasattr(ref_outputs, "pooler_output") and ref_outputs.pooler_output is not None:
+            ref_sentence_embeddings = ref_outputs.pooler_output.cpu().numpy()
+        else:
+            # mean pooling over token embeddings using attention mask
+            attention_mask = tok_out.get("attention_mask")
+            if attention_mask is None:
+                attention_mask = np.ones(ref_token_embeddings.shape[:2], dtype=np.int32)
+            else:
+                attention_mask = attention_mask.cpu().numpy()
+            # Try to honor Sentence-Transformers pooling config when available
+            ref_sentence_embeddings = None
+            pool_cfg = _load_pooling_config(reference_model)
+            if pool_cfg.get("pooling_mode_cls_token", False):
+                ref_sentence_embeddings = ref_token_embeddings[:, 0, :]
+            elif pool_cfg.get("pooling_mode_mean_tokens", False):
+                ref_sentence_embeddings = mean_pooling(ref_token_embeddings, attention_mask)
+
+            if ref_sentence_embeddings is None:
+                ref_sentence_embeddings = mean_pooling(ref_token_embeddings, attention_mask)
+
+    # Run ONNX
+    print(f"Running ONNX session on: {onnx_path}")
+
     # Build ONNX inputs from tokenizer outputs (use CPU numpy arrays)
     tok_out_cpu = {k: (v.cpu() if hasattr(v, "cpu") else v) for k, v in tok_out.items()}
     onnx_inputs = build_onnx_inputs(sess, tok_out_cpu)
@@ -530,54 +597,69 @@ def main(argv: List[str] | None = None) -> int:
     _align_map = {}
     if len(onnx_outs) == 1:
         onnx_arr = onnx_outs[0]
+        output_name = output_names[0] if output_names else "output_0"
         try:
-            # if shapes align with token embeddings, compare token outputs
-            cmp = compare_arrays(ref_token_embeddings, onnx_arr)
-            if cmp.get("shape_mismatch"):
-                # try comparing pooled sentence embeddings instead. When shapes
-                # match, L2-normalize both sides to avoid failures caused by
-                # differing normalization semantics between implementations.
-                if ref_sentence_embeddings.shape == onnx_arr.shape:
-                    if normalize_embeddings:
-                        ref_norm = l2_normalize(ref_sentence_embeddings)
-                        onnx_norm = l2_normalize(onnx_arr)
-                        cmp2 = compare_arrays(ref_norm, onnx_norm)
-                        _align_map["sentence_embedding"] = (ref_norm, onnx_norm)
+            if ref_logits is not None and (_is_logits_output_name(output_name) or ref_logits.shape == onnx_arr.shape):
+                cmp = compare_arrays(ref_logits, onnx_arr)
+                results["logits"] = cmp
+                _align_map["logits"] = (ref_logits, onnx_arr)
+            elif ref_token_embeddings is None or ref_sentence_embeddings is None:
+                results["error"] = f"No reference embeddings available for ONNX output `{output_name}`"
+            else:
+                # if shapes align with token embeddings, compare token outputs
+                cmp = compare_arrays(ref_token_embeddings, onnx_arr)
+                if cmp.get("shape_mismatch"):
+                    # try comparing pooled sentence embeddings instead. When shapes
+                    # match, L2-normalize both sides to avoid failures caused by
+                    # differing normalization semantics between implementations.
+                    if ref_sentence_embeddings.shape == onnx_arr.shape:
+                        if normalize_embeddings:
+                            ref_norm = l2_normalize(ref_sentence_embeddings)
+                            onnx_norm = l2_normalize(onnx_arr)
+                            cmp2 = compare_arrays(ref_norm, onnx_norm)
+                            _align_map["sentence_embedding"] = (ref_norm, onnx_norm)
+                        else:
+                            cmp2 = compare_arrays(ref_sentence_embeddings, onnx_arr)
+                            _align_map["sentence_embedding"] = (
+                                ref_sentence_embeddings,
+                                onnx_arr,
+                            )
                     else:
                         cmp2 = compare_arrays(ref_sentence_embeddings, onnx_arr)
                         _align_map["sentence_embedding"] = (
                             ref_sentence_embeddings,
                             onnx_arr,
                         )
+                    results["sentence_embedding"] = cmp2
                 else:
-                    cmp2 = compare_arrays(ref_sentence_embeddings, onnx_arr)
-                    _align_map["sentence_embedding"] = (
-                        ref_sentence_embeddings,
-                        onnx_arr,
-                    )
-                results["sentence_embedding"] = cmp2
-            else:
-                results["token_embeddings"] = cmp
-                _align_map["token_embeddings"] = (ref_token_embeddings, onnx_arr)
+                    results["token_embeddings"] = cmp
+                    _align_map["token_embeddings"] = (ref_token_embeddings, onnx_arr)
         except Exception as e:
             results["error"] = str(e)
     else:
         # If multiple outputs, compare each ONNX output to both token and
         # sentence embeddings and compute cosine similarity to aid mapping.
-        output_names = [o.name for o in sess.get_outputs()]
         per_output_stats = []
         for idx, out in enumerate(onnx_outs):
             name = output_names[idx] if idx < len(output_names) else f"out_{idx}"
             key = f"onnx_out_{idx}({name})"
             best_cmp = None
             try:
+                tcmp = None
+                matched_logits_name = False
+                if ref_logits is not None and (_is_logits_output_name(name) or ref_logits.shape == out.shape):
+                    lcmp = compare_arrays(ref_logits, out)
+                    best_cmp = ("logits", lcmp, (ref_logits, out))
+                    matched_logits_name = _is_logits_output_name(name)
+
                 # First try token embeddings
-                tcmp = compare_arrays(ref_token_embeddings, out)
-                if not tcmp.get("shape_mismatch"):
-                    best_cmp = ("token_embeddings", tcmp, (ref_token_embeddings, out))
+                if not matched_logits_name and ref_token_embeddings is not None:
+                    tcmp = compare_arrays(ref_token_embeddings, out)
+                    if not tcmp.get("shape_mismatch"):
+                        best_cmp = ("token_embeddings", tcmp, (ref_token_embeddings, out))
                 # Then try sentence embeddings if shapes align
                 scmp = None
-                if ref_sentence_embeddings.shape == out.shape:
+                if not matched_logits_name and ref_sentence_embeddings is not None and ref_sentence_embeddings.shape == out.shape:
                     if normalize_embeddings:
                         ref_norm = l2_normalize(ref_sentence_embeddings)
                         out_norm = l2_normalize(out)
@@ -643,10 +725,7 @@ def main(argv: List[str] | None = None) -> int:
     print(json.dumps(results, indent=2))
 
     # Determine pass/fail based on max_abs_diff
-    max_diff = 0.0
-    for v in results.values():
-        if isinstance(v, dict) and not v.get("shape_mismatch", False):
-            max_diff = max(max_diff, v.get("max_abs_diff", 0.0))
+    max_diff, comparable_count, comparison_failures = summarize_comparison_results(results)
 
     print(f"Maximum absolute difference across compared outputs: {max_diff}")
     # Fallback: if token-level outputs match and mean-pooled token ONNX matches
@@ -677,7 +756,7 @@ def main(argv: List[str] | None = None) -> int:
             except Exception:
                 continue
 
-        if token_map_key is not None and "ref_sentence_embeddings" in locals():
+        if token_map_key is not None and ref_sentence_embeddings is not None:
             try:
                 pair = _align_map.get(token_map_key)
                 if pair is None:
@@ -783,17 +862,16 @@ def main(argv: List[str] | None = None) -> int:
         pass
 
     # Recompute max_diff after potential fallback replacement
-    max_diff = 0.0
-    for v in results.values():
-        if isinstance(v, dict) and not v.get("shape_mismatch", False):
-            max_diff = max(max_diff, v.get("max_abs_diff", 0.0))
+    max_diff, comparable_count, comparison_failures = summarize_comparison_results(results)
 
     print(f"Maximum absolute difference across compared outputs: {max_diff}")
 
-    if max_diff <= args.atol or max_diff <= args.rtol:
+    if comparisons_within_tolerance(results, args.atol, args.rtol):
         print("Validation: PASS (within tolerance)")
         return 0
     else:
+        if comparable_count == 0:
+            print(f"Validation: FAIL (no comparable outputs found: {comparison_failures}).")
         print("Validation: FAIL (exceeds tolerances).")
 
         if args.skip_diagnostics:

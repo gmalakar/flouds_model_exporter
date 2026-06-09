@@ -79,12 +79,12 @@ batch_presets:
       task: seq2seq-lm
       library: transformers
       skip: true
-    - model_name: Flan-T5-base
+    - model_name: google/flan-t5-base
       model_for: s2s
       task: seq2seq-lm
       library: transformers
       skip: true
-    - model_name: Flan-T5-Small
+    - model_name: google/flan-t5-small
       model_for: s2s
       task: seq2seq-lm
       library: transformers

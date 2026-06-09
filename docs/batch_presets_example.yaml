@@ -19,5 +19,4 @@ batch_presets:
       library: transformers
       merge: true
       use_subprocess: true
-      use_external_data_format: true
       low_memory_env: true

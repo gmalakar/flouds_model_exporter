@@ -1,9 +1,18 @@
 include README.md
 include LICENSE
+include NOTICE
 include CHANGELOG.md
+include SECURITY.md
+include CONTRIBUTING.md
+include CODE_OF_CONDUCT.md
 include pyproject.toml
+include requirements-prod.txt
+include requirements-dev.txt
+include run_exports.ps1
+include run_exports.sh
+recursive-include docs *.md *.txt *.yaml *.yml
 graft src/model_exporter
-recursive-include src/model_exporter *.yaml *.yml *.json *.md
+recursive-include src/model_exporter *.yaml *.yml *.json
 prune tests
 prune tools
 prune EXAMPLES

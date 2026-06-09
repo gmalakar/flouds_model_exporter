@@ -52,7 +52,8 @@ def compare_arrays(ref: np.ndarray, onnx_arr: np.ndarray) -> dict:
 
         - ``shape_mismatch`` (``bool``): ``True`` when shapes differ.
         - ``ref_shape`` / ``onnx_shape``: Present only when shapes differ.
-        - ``max_abs_diff``, ``mean_abs_diff``, ``l2``: Present when shapes match.
+        - ``max_abs_diff``, ``max_rel_diff``, ``mean_abs_diff``, ``l2``:
+          Present when shapes match.
     """
     if ref.shape != onnx_arr.shape:
         return {
@@ -61,12 +62,52 @@ def compare_arrays(ref: np.ndarray, onnx_arr: np.ndarray) -> dict:
             "onnx_shape": onnx_arr.shape,
         }
     diff = np.abs(ref - onnx_arr)
+    rel = diff / np.maximum(np.abs(ref), 1e-12)
     return {
         "shape_mismatch": False,
         "max_abs_diff": float(diff.max()),
+        "max_rel_diff": float(rel.max()),
         "mean_abs_diff": float(diff.mean()),
         "l2": float(np.linalg.norm(ref - onnx_arr)),
     }
+
+
+def summarize_comparison_results(results: dict) -> tuple[float, int, list[str]]:
+    """Summarize validator comparison results for final pass/fail handling."""
+    max_diff = 0.0
+    comparable_count = 0
+    failures = []
+
+    for key, value in results.items():
+        if not isinstance(value, dict):
+            failures.append(str(key))
+            continue
+        if value.get("shape_mismatch", False) or "error" in value:
+            failures.append(str(key))
+            continue
+        if "max_abs_diff" not in value:
+            failures.append(str(key))
+            continue
+        comparable_count += 1
+        max_diff = max(max_diff, float(value.get("max_abs_diff", 0.0)))
+
+    return max_diff, comparable_count, failures
+
+
+def comparisons_within_tolerance(results: dict, atol: float, rtol: float) -> bool:
+    """Return True when every comparable result is within tolerance."""
+    _max_diff, comparable_count, failures = summarize_comparison_results(results)
+    if comparable_count == 0 or failures:
+        return False
+
+    for value in results.values():
+        if not isinstance(value, dict) or value.get("shape_mismatch", False):
+            return False
+        max_abs = float(value.get("max_abs_diff", float("inf")))
+        max_rel = float(value.get("max_rel_diff", float("inf")))
+        if max_abs > atol and max_rel > rtol:
+            return False
+    return True
 
 
 def l2_normalize(arr: np.ndarray, axis: int = -1, eps: float = 1e-12) -> np.ndarray:

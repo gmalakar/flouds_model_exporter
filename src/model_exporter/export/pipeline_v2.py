@@ -22,6 +22,7 @@ from typing import Any, Callable, List, Optional
 
 from model_exporter.export.helpers import cleanup_temporary_export_artifacts
 from model_exporter.export.legacy_fallback import run_legacy_v1_fallback
+from model_exporter.export.path_utils import safe_replace_export_dir
 from model_exporter.export.pipeline_helpers import _remove_validation_marker, _write_validation_marker
 from model_exporter.export.subprocess_runner import _run_main_export_subprocess
 from model_exporter.utils.helpers import get_default_opset, get_logger, safe_log
@@ -410,10 +411,12 @@ def _move_working_to_output(working_output: str, output_dir: str, logger: Any) -
                 working_output,
             )
 
-        if os.path.exists(output_dir):
-            _shutil.rmtree(output_dir)
-        _shutil.copytree(working_output, output_dir)
-        _shutil.rmtree(working_output)
+        safe_replace_export_dir(
+            working_output,
+            output_dir,
+            os.path.dirname(os.path.abspath(output_dir)),
+            logger,
+        )
         return True
     except Exception as move_exc:
         safe_log(

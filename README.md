@@ -1,7 +1,7 @@
 [![PyPI Version](https://img.shields.io/pypi/v/flouds-model-exporter.svg)](https://pypi.org/project/flouds-model-exporter/)
 ![Python Versions](https://img.shields.io/pypi/pyversions/flouds-model-exporter.svg)
 ![License](https://img.shields.io/pypi/l/flouds-model-exporter.svg)
-![Build](https://github.com/gmalakar/flouds_model_exporter/actions/workflows/publish-pypi.yml/badge.svg)
+![Build](https://github.com/gmalakar/flouds_model_exporter/actions/workflows/ci.yml/badge.svg)
 
 # flouds_model_exporter
 
@@ -11,12 +11,12 @@ Production-grade ONNX model export toolkit for HuggingFace transformers.
 
 flouds_model_exporter provides a unified pipeline for converting HuggingFace models to optimized ONNX format:
 
-- **Universal Export** – Supports embedding models, seq2seq, classification, and large language models (LLMs)
-- **Smart Optimization** – Automatic ONNX optimization with configurable levels and portability modes
-- **Robust Validation** – Numeric verification ensuring export accuracy before deployment
-- **Large Model Support** – External-data format, subprocess isolation, and memory management for multi-GB models
-- **Batch Orchestration** – Python-native batch subcommand with YAML-driven presets for automated multi-model export workflows
-- **Fallback Strategies** – Automatic opset retry, trust_remote_code handling, and error recovery
+- **Universal Export** - Supports embedding models, seq2seq, classification, and large language models (LLMs)
+- **Smart Optimization** - Automatic ONNX optimization with configurable levels and portability modes
+- **Robust Validation** - Numeric verification ensuring export accuracy before deployment
+- **Large Model Support** - External-data format, subprocess isolation, and memory management for multi-GB models
+- **Batch Orchestration** - Python-native batch subcommand with YAML-driven presets for automated multi-model export workflows
+- **Fallback Strategies** - Opset retry, explicit remote-code trust handling, and export error recovery
 
 ## Quick Start
 
@@ -35,8 +35,8 @@ pip install flouds-model-exporter
 git clone https://github.com/gmalakar/flouds_model_exporter.git
 cd flouds_model_exporter
 
-# Create a Python 3.11 or 3.12 virtual environment
-py -3.11 -m venv .venv
+# Create a Python 3.12 virtual environment (3.11 is also supported)
+py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
 # Install the package and all dependencies
@@ -185,7 +185,7 @@ chmod +x ./run_exports.sh
 ./run_exports.sh --config ./docs/batch_presets_example.yaml --preset text-import --fail-fast
 ```
 
-Note: the `--suppress-warning` wrapper/CLI option has been removed. To control logging behavior use `--log-to-file` (or `-LogToFile` for the PowerShell wrapper) which requests per-export log files and tee'ing of stdout/stderr into the logfile. By default the exporter writes logs to file unless overridden.
+Note: the `--suppress-warning` wrapper/CLI option has been removed. To control logging behavior, use `--log-to-file` (or `-LogToFile` for the PowerShell wrapper) to request per-export log files and tee stdout/stderr into the logfile. By default the exporter logs to the terminal only.
 
 #### Batch Examples (YAML and Text File)
 
@@ -209,7 +209,7 @@ Run using text file import:
 .\run_exports.ps1 -TextFile .\docs\batch_commands.txt -Preset text-import -FailFast
 ```
 
-Note: text file entries must use the new hyphenated CLI flags (for example `--opset-version`, not `--opset_version`).
+Note: text file entries must use the new hyphenated CLI flags, such as `--opset-version`; underscored flag names are rejected.
 
 ### Validate An Export
 
@@ -246,7 +246,7 @@ output_dir = export(
     model_for="fe",
     task="feature-extraction",
     optimize=True,
-    # onnx_path not needed — picked up from ONNX_PATH env var
+    # onnx_path not needed; picked up from ONNX_PATH env var
 )
 print(f"Exported to: {output_dir}")
 ```
@@ -284,7 +284,7 @@ export(
     task="text-generation-with-past",
     use_external_data_format=True,
     use_subprocess=True,
-  use_fallback_if_failed=True,
+    use_fallback_if_failed=True,
     merge=True,
     hf_token="hf_xxx_your_token",  # for gated models
 )
@@ -299,7 +299,7 @@ export(
 | `task` | `str` | `None` | e.g. `feature-extraction`, `seq2seq-lm`, `sequence-classification` |
 | `onnx_path` | `str` | `"onnx"` | Output directory |
 | `optimize` | `bool` | `False` | Run ONNX optimizer after export |
-| `optimization_level` | `int` | `99` | ORT optimization level (0–99) |
+| `optimization_level` | `int` | `99` | ORT optimization level (`0`, `1`, `2`, or `99`) |
 | `opset_version` | `int` | auto | ONNX opset version |
 | `device` | `str` | `"cpu"` | `cpu` or `cuda` |
 | `framework` | `str` | `None` | `pt` or `tf` |
@@ -336,7 +336,7 @@ export(
 | `--framework` | `pt` | Framework: `pt` (PyTorch) or `tf` (TensorFlow) |
 | `--device` | `cpu` | Target device: `cpu` or `cuda` |
 | `--opset-version` | `17` | ONNX opset version (11, 14, or 17) |
-| `--trust-remote-code` | `false` | Allow custom model code execution (⚠ security risk) |
+| `--trust-remote-code` | `false` | Allow custom model code execution. Review the model code first. |
 | `--force` | `false` | Overwrite existing exports |
 
 ### Optimization & Validation
@@ -344,13 +344,15 @@ export(
 | Parameter | Description |
 |-----------|-------------|
 | `--optimize` | Enable post-export ONNX optimization |
-| `--optimization-level` | Optimization level: 0-99 (default: 99) |
-| `--portable` | Use conservative optimizations for cross-platform compatibility |
+| `--optimization-level` | Optimization level: `0`, `1`, `2`, or `99`. Requires `--optimize`; default when optimizing is 99 |
+| `--portable` | Use conservative optimizations for cross-platform compatibility. Requires `--optimize` |
 | `--skip-validator` | Skip numeric validation |
 | `--require-validator` | Fail build if validation fails |
 | `--normalize-embeddings` | L2-normalize embeddings during validation |
 
-The standalone `optimize` subcommand accepts `--model-dir`, `--model-for`, `--optimization-level`, and `--portable` so you can re-run optimization without repeating export.
+`--skip-validator` cannot be combined with `--require-validator` or `--normalize-embeddings`.
+
+The standalone `optimize` subcommand accepts `--model-dir`, `--model-for`, `--optimization-level`, and `--portable` so you can re-run optimization without repeating export. The `batch` subcommand also accepts `--optimization-level` as a global override for all batch exports. Batch global overrides follow the same dependency rules: `--optimization-level` and `--portable` require `--optimize`, `--prune-canonical` requires `--cleanup`, and `--no-local-prep` must be set per LLM entry instead of globally.
 
 ### Large Model Options
 
@@ -360,17 +362,19 @@ The standalone `optimize` subcommand accepts `--model-dir`, `--model-for`, `--op
 | `--use-sub-process` | Run export in isolated subprocess (safer for large models) |
 | `--use-fallback-if-failed` | Enable legacy fallback exporter only if primary export fails |
 | `--no-post-process` | Skip ONNX post-processing (reduces memory usage) |
+| `--low-memory-env` | Apply low-memory export settings; implies external data format and disabled post-processing |
 | `--pack-single-file` | Repack external-data model into single file during validation |
-| `--pack-single-threshold-mb` | Size threshold for repacking (default: 1536 MB) |
+
+Do not combine `--low-memory-env` with `--use-external-data-format` or `--no-post-process`; those settings are already implied.
 
 ### Advanced Options
 
 | Parameter | Description |
 |-----------|-------------|
-| `--merge` | Merge decoder artifacts for LLMs (with-past only) |
-| `--no-local-prep` | Skip local model preparation for LLMs |
+| `--merge` | Merge decoder artifacts for LLMs (with-past only). Requires `--model-for llm` |
+| `--no-local-prep` | Skip local model preparation for LLMs. Requires `--model-for llm` |
 | `--cleanup` | Remove temporary/extraneous files post-export |
-| `--prune-canonical` | Remove canonical models when merged version exists |
+| `--prune-canonical` | Remove canonical models when merged version exists. Requires `--cleanup` |
 | `--hf-token` | HuggingFace API token for private models |
 | `--onnx-path` | Custom output directory (default: `./onnx`) |
 
@@ -380,24 +384,24 @@ Exported models are organized by type and name:
 
 ```
 onnx/models/
-├── fe/                              # Feature extraction (embeddings)
-│   ├── all-MiniLM-L6-v2/
-│   │   └── model.onnx
-│   └── bge-small-en-v1.5/
-│       ├── model.onnx
-│       └── model.onnx_data          # External data (if >2GB)
-├── s2s/                             # Seq2seq models
-│   ├── t5-small/
-│   │   ├── encoder_model.onnx
-│   │   ├── decoder_model.onnx
-│   │   └── decoder_with_past_model.onnx
-│   └── bart-large-cnn/
-└── llm/                             # Large language models
-    ├── deepseek-coder-1.3b-instruct/
-    │   ├── model.onnx
-    │   ├── model.onnx_data
-    │   └── model_merged.onnx        # Merged version (if --merge used)
-    └── phi-3-mini-4k-instruct/
++-- fe/                              # Feature extraction (embeddings)
+|   +-- all-MiniLM-L6-v2/
+|   |   +-- model.onnx
+|   +-- bge-small-en-v1.5/
+|       +-- model.onnx
+|       +-- model.onnx_data          # External data (if >2GB)
++-- s2s/                             # Seq2seq models
+|   +-- t5-small/
+|   |   +-- encoder_model.onnx
+|   |   +-- decoder_model.onnx
+|   |   +-- decoder_with_past_model.onnx
+|   +-- bart-large-cnn/
++-- llm/                             # Large language models
+    +-- deepseek-coder-1.3b-instruct/
+    |   +-- model.onnx
+    |   +-- model.onnx_data
+    |   +-- model_merged.onnx        # Merged version (if --merge used)
+    +-- phi-3-mini-4k-instruct/
 ```
 
 ## Architecture
@@ -405,21 +409,21 @@ onnx/models/
 ### Directory Structure
 
 ```
-src/model_exporter/ (also available via `src/model_exporter/` alias)
-├── cli/                            # CLI entrypoints and subcommands
-├── config/                         # Logging and batch policy
-├── export/                         # Export pipeline, helpers, optimizer, subprocess runner
-├── utils/                          # Diagnostics and helper utilities
-└── validation/                     # Structural and numeric validation
+src/model_exporter/
++-- cli/                            # CLI entrypoints and subcommands
++-- config/                         # Logging and batch policy
++-- export/                         # Export pipeline, helpers, optimizer, subprocess runner
++-- utils/                          # Diagnostics and helper utilities
++-- validation/                     # Structural and numeric validation
 ```
 
 ### Export Pipeline
 
-1. **Preparation** – Token setup, model validation, output directory creation
-2. **Export** – `optimum.exporters.onnx.main_export` with fallback strategies
-3. **Validation** – Structural checks + numeric validation (input/output comparison)
-4. **Optimization** – ONNX Runtime optimization passes (optional)
-5. **Cleanup** – Remove temporary files, prune redundant artifacts
+1. **Preparation** - Token setup, model validation, output directory creation
+2. **Export** - `optimum.exporters.onnx.main_export` with fallback strategies
+3. **Validation** - Structural checks + numeric validation (input/output comparison)
+4. **Optimization** - ONNX Runtime optimization passes (optional)
+5. **Cleanup** - Remove temporary files, prune redundant artifacts
 
 ## Memory Management
 
@@ -458,10 +462,10 @@ Each preset entry maps directly to export CLI arguments, which makes export pipe
 
 For models >2GB:
 
-1. **Enable external data format** – Splits model into .onnx + .onnx_data
-2. **Use subprocess isolation** – Prevents memory leaks affecting subsequent exports
-3. **Skip post-processing** – Reduces peak memory during export
-4. **Lower opset version** – Simplifies optimization (try opset 11)
+1. **Enable external data format** - Splits model into .onnx + .onnx_data
+2. **Use subprocess isolation** - Prevents memory leaks affecting subsequent exports
+3. **Skip post-processing** - Reduces peak memory during export
+4. **Lower opset version** - Simplifies optimization (try opset 11)
 
 ```powershell
 flouds-export export `
@@ -488,7 +492,7 @@ flouds-export export `
 
 ### Export Logs
 
-Logs are saved to `logs/onnx_exports/` with per-model timestamped files. Configure log directory via `FLOUDS_LOG_DIR` environment variable.
+By default, export logs go to the terminal only. When `--log-to-file` or `log_to_file=True` is set, per-model timestamped logs are written to `logs/onnx_exports/` under the current working directory. Set `FLOUDS_LOG_DIR` to write file logs somewhere else.
 
 ## Requirements
 

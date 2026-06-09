@@ -22,7 +22,9 @@ Date: 2026-04-17
 ## Added Repository Legal Files
 
 - Added root `LICENSE` with Apache-2.0 text.
+- Added root `NOTICE` with project and direct dependency notice information.
 - Added `CONTRIBUTING.md`.
 - Added `CODE_OF_CONDUCT.md`.
 - Added `SECURITY.md`.
 - Added `CHANGELOG.md`.
+- Added `MANIFEST.in` entries so release source distributions include legal and governance docs.

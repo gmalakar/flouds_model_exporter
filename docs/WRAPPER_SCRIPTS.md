@@ -11,6 +11,8 @@ The wrapper scripts forward to the canonical Python batch CLI and provide:
 - Optional text-file import into a temporary batch preset
 - Consistent invocation on different operating systems
 
+Both wrappers automatically use the repository `.venv` interpreter when it exists. The `-UseVenv` / `--use-venv` flag makes that requirement explicit and fails fast when `.venv` is missing.
+
 Canonical CLI command shape:
 
 ```bash
@@ -23,20 +25,21 @@ Script: `run_exports.ps1`
 
 ### Parameters
 
-- `-UseVenv`: use `./.venv/Scripts/python.exe`
+- `-UseVenv`: require `./.venv/Scripts/python.exe`
 - `-Force`: apply `--force` to each batch export
 - `-Optimize`: apply `--optimize`
+- `-OptimizationLevel <0|1|2|99>`: apply `--optimization-level`; requires `-Optimize`
 - `-Cleanup`: apply `--cleanup`
-- `-SkipValidator`: apply `--skip-validator`
-- `-PruneCanonical`: apply `--prune-canonical`
-- `-Portable`: apply `--portable`
-- `-NoLocalPrep`: apply `--no-local-prep`
+- `-SkipValidator`: apply `--skip-validator` unless active entries request validator-only options
+- `-PruneCanonical`: apply `--prune-canonical`; requires `-Cleanup`
+- `-Portable`: apply `--portable`; requires `-Optimize`
 - `-FailFast`: apply `--fail-fast` (stop on first failure)
 - `-Config <path>`: use a YAML/JSON batch config file
 - `-TextFile <path>`: parse text commands and build a temporary batch config
+- `-BatchFile <path>`: use YAML/JSON config or text commands, detected by extension
 - `-Preset <name>`: preset name in the selected config (default: `recommended`)
 - `-MinFreeMemoryGB <int>`: minimum free RAM threshold for batch (default: `1`)
-- `-LogToFile`: request per-export log files and print the logfile path (PowerShell wrapper only)
+- `-LogToFile`: request per-export log files and print the logfile path
 
 ### Examples
 
@@ -52,26 +55,31 @@ powershell -ExecutionPolicy Bypass -File .\run_exports.ps1 -Config .\docs\batch_
 powershell -ExecutionPolicy Bypass -File .\run_exports.ps1 -TextFile .\docs\batch_commands.txt -Preset text-import -FailFast
 ```
 
+```powershell
+powershell -ExecutionPolicy Bypass -File .\run_exports.ps1 -BatchFile .\docs\batch_presets_full.yaml -Preset full -Optimize -OptimizationLevel 2 -Cleanup
+```
+
 ## Linux/macOS Wrapper
 
 Script: `run_exports.sh`
 
 ### Parameters
 
-- `--use-venv`: use `./.venv/bin/python`
+- `--use-venv`: require `./.venv/bin/python`
 - `--force`: apply `--force` to each batch export
 - `--optimize`: apply `--optimize`
+- `--optimization-level <0|1|2|99>`: apply `--optimization-level`; requires `--optimize`
 - `--cleanup`: apply `--cleanup`
-- `--skip-validator`: apply `--skip-validator`
-- `--prune-canonical`: apply `--prune-canonical`
-- `--portable`: apply `--portable`
-- `--no-local-prep`: apply `--no-local-prep`
+- `--skip-validator`: apply `--skip-validator` unless active entries request validator-only options
+- `--prune-canonical`: apply `--prune-canonical`; requires `--cleanup`
+- `--portable`: apply `--portable`; requires `--optimize`
 - `--fail-fast`: apply `--fail-fast` (stop on first failure)
 - `--config <path>`: use a YAML/JSON batch config file
 - `--text-file <path>`: parse text commands and build a temporary batch config
+- `--batch-file <path>`: use YAML/JSON config or text commands, detected by extension
 - `--preset <name>`: preset name in the selected config (default: `recommended`)
 - `--min-free-memory-gb <int>`: minimum free RAM threshold for batch (default: `1`)
-- `--log-to-file`: request per-export log files and print the logfile path (shell wrapper only)
+- `--log-to-file`: request per-export log files and print the logfile path
 
 ### Examples
 
@@ -86,6 +94,10 @@ chmod +x ./run_exports.sh
 
 ```bash
 ./run_exports.sh --text-file ./docs/batch_commands.txt --preset text-import --fail-fast
+```
+
+```bash
+./run_exports.sh --batch-file ./docs/batch_presets_full.yaml --preset full --optimize --optimization-level 2 --cleanup
 ```
 
 ## Text File Mode
@@ -109,5 +121,7 @@ flouds-export export --model-name BAAI/bge-base-en-v1.5 --model-for fe --task fe
 Useful example files:
 
 - `docs/batch_presets_example.yaml`
+- `docs/batch_presets_full.yaml`
 - `docs/batch_commands.txt`
+- `docs/batch_commands_full.txt`
 - `src/model_exporter/config/policy.yaml`

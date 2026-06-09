@@ -1,6 +1,7 @@
 # =============================================================================
 # File: pipeline_helpers.py
-# Date: 2026-04-17
+# Date Created: 2026-04-17
+# Date Updated: 2026-04-19
 # Copyright (c) 2026 Goutam Malakar.
 # SPDX-License-Identifier: Apache-2.0
 # =============================================================================
@@ -203,36 +204,30 @@ def _create_export_lock(output_dir: str, model_name: str, logger: Any) -> tuple[
                 raise SystemExit(0)
             else:
                 age = (now - ts) if ts else None
-                removal_needed = False
-
-                if age is None or age > stale_threshold:
-                    removal_needed = True
-                else:
-                    removal_needed = True
-
-                if removal_needed:
-                    try:
-                        os.remove(lock_path)
-                        if age is None or age > stale_threshold:
-                            logger.info(
-                                "Removed stale lock file (age=%.0fs): %s",
-                                age if age else 0,
-                                lock_path,
-                            )
-                        else:
-                            logger.info(
-                                "Found recent lock file but owner not running; removing and continuing: %s",
-                                lock_path,
-                            )
-                    except Exception:
-                        if age is not None and age <= stale_threshold:
-                            logger.warning(
-                                "Could not remove recent lock file; exiting to avoid race: %s",
-                                lock_path,
-                            )
-                            raise SystemExit(0)
-                        else:
-                            logger.warning("Could not remove stale lock file: %s", lock_path)
+                # The owner PID is no longer running — always attempt removal.
+                # Log differently for recent vs stale locks to aid diagnosis.
+                try:
+                    os.remove(lock_path)
+                    if age is None or age > stale_threshold:
+                        logger.info(
+                            "Removed stale lock file (age=%.0fs): %s",
+                            age if age else 0,
+                            lock_path,
+                        )
+                    else:
+                        logger.info(
+                            "Found recent lock file but owner not running; removing and continuing: %s",
+                            lock_path,
+                        )
+                except Exception:
+                    if age is not None and age <= stale_threshold:
+                        logger.warning(
+                            "Could not remove recent lock file; exiting to avoid race: %s",
+                            lock_path,
+                        )
+                        raise SystemExit(0)
+                    else:
+                        logger.warning("Could not remove stale lock file: %s", lock_path)
 
         try:
             with open(lock_path, "x", encoding="utf-8") as fh:
@@ -614,10 +609,11 @@ def _resolve_use_cache(model_name: str, model_for: str, task: str | None, logger
 
 
 def _auto_resolve_trust_remote_code(model_name: str, token: Optional[str], trust_remote_code: bool, logger: Any) -> bool:
-    """Auto-enable trust_remote_code when the model config requires it.
+    """Return the caller-approved ``trust_remote_code`` setting.
 
     If ``trust_remote_code`` is already True, returns True immediately.
-    Otherwise performs a fast config check and auto-enables when needed.
+    Otherwise performs a fast config check and warns when remote code appears
+    to be required, but does not enable it implicitly.
 
     Args:
         model_name: HuggingFace model ID or local path.
@@ -626,17 +622,18 @@ def _auto_resolve_trust_remote_code(model_name: str, token: Optional[str], trust
         logger: Logger instance for informational messages.
 
     Returns:
-        True if trust_remote_code should be enabled, False otherwise.
+        True only when the caller explicitly allowed ``trust_remote_code``.
     """
     if trust_remote_code:
         return True
     try:
         if _requires_trust_remote_code_fast(model_name, token):
-            logger.info(
-                "Auto-enabling trust_remote_code for %s based on quick check",
+            logger.warning(
+                "Model %s appears to require trust_remote_code, but remote code "
+                "execution was not explicitly allowed. Re-run with "
+                "--trust-remote-code after reviewing the model code.",
                 model_name,
             )
-            return True
     except Exception:
         logger.debug("requires_trust_remote_code_fast check failed", exc_info=True)
     return False

@@ -71,6 +71,18 @@ def _load_ort_optimizer_classes() -> tuple[Any, Any]:
     return ORTOptimizer, OptimizationConfig
 
 
+def _call_with_retry(fn: Any, *args: Any, **kwargs: Any) -> Any:
+    """Call Optimum APIs while tolerating older versions without local_files_only."""
+    try:
+        return fn(*args, **kwargs)
+    except TypeError:
+        if "local_files_only" not in kwargs:
+            raise
+        safe_kwargs = dict(kwargs)
+        safe_kwargs.pop("local_files_only", None)
+        return fn(*args, **safe_kwargs)
+
+
 def optimize_if_encoder(
     model_dir: Path | str,
     model_type: str,
@@ -164,24 +176,25 @@ def optimize_if_encoder(
         logger.info("config.json is required for optimization.")
         return 0
 
-    # Attempt filewise in-place optimization first (avoid copying to encoder/)
+    marker = model_dir / ".optimizations_applied"
+    try:
+        if marker.exists():
+            marker.unlink()
+    except Exception:
+        logger.debug("Could not remove stale optimization marker", exc_info=True)
+
     try:
         ORTOptimizer, OptimizationConfig = _load_ort_optimizer_classes()
-
-        # Prepare optimization config
         optimization_config = OptimizationConfig(optimization_level=optimization_level)
+    except Exception as exc:
+        logger.warning("Optimum ONNX Runtime optimizer is not available: %s", exc)
+        return 1
 
-        # Some Optimum versions accept local_files_only, some don't
-        load_kwargs = {"local_files_only": True}
+    # Some Optimum versions accept local_files_only, some don't.
+    load_kwargs = {"local_files_only": True}
 
-        def _call_with_retry(fn, *a, **kw):
-            try:
-                return fn(*a, **kw)
-            except TypeError:
-                safe = dict(kw)
-                safe.pop("local_files_only", None)
-                return fn(*a, **safe)
-
+    # Attempt filewise in-place optimization first (avoid copying to encoder/)
+    try:
         logger.info("Attempting filewise in-place optimization in: %s", model_dir)
 
         filewise_ok = True
@@ -229,7 +242,6 @@ def optimize_if_encoder(
             # Do NOT replace originals here. A separate process handles replacement.
             # Write a marker that maps optimized files to their original names
             try:
-                marker = model_dir / ".optimizations_applied"
                 with open(marker, "w", encoding="utf-8") as mf:
                     for opt_path, orig_path in optimized_pairs:
                         mf.write(f"{opt_path.name} -> {orig_path.name}\n")
@@ -396,6 +408,10 @@ def optimize_if_encoder(
                 continue
 
         # After individual optimizations, copy back non-ONNX support files (e.g., ort_config.json, config.json)
+        if not optimized_written:
+            logger.warning("Encoder optimization did not produce optimized ONNX artifacts.")
+            return 1
+
         try:
             for p in encoder_dir.iterdir():
                 if p.suffix.lower() == ".onnx":
@@ -435,7 +451,6 @@ def optimize_if_encoder(
 
         # Write marker file listing optimized artifacts
         try:
-            marker = model_dir / ".optimizations_applied"
             try:
                 with open(marker, "w", encoding="utf-8") as mf:
                     for name in optimized_written:

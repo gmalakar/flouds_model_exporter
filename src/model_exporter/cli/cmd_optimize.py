@@ -36,8 +36,9 @@ def _add_optimize_arguments(parser):
         "--optimization-level",
         dest="optimization_level",
         type=int,
+        choices=[0, 1, 2, 99],
         default=99,
-        help="ONNX optimization level (default: 99)",
+        help="ONNX optimization level. Choices: 0, 1, 2, 99 (default: 99)",
     )
     parser.add_argument(
         "--portable",

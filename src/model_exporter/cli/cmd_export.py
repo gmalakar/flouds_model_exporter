@@ -1,6 +1,7 @@
 # =============================================================================
 # File: cli/cmd_export.py
-# Date: 2026-01-10
+# Date Created: 2026-04-19
+# Date Updated: 2026-04-19
 # Copyright (c) 2026 Goutam Malakar.
 # SPDX-License-Identifier: Apache-2.0
 # =============================================================================
@@ -11,11 +12,8 @@ from __future__ import annotations
 import inspect
 import os
 
+from model_exporter.export.options import ExportConfig
 from model_exporter.export.pipeline import export as export_unified
-
-# Default ONNX path: <project_root>/onnx, or ONNX_PATH env variable.
-_repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-_default_onnx_path = os.path.join(_repo_root, "onnx")
 
 
 def _add_export_arguments(parser):
@@ -33,7 +31,7 @@ def _add_export_arguments(parser):
         dest="log_to_file",
         action="store_true",
         default=False,
-        help="Log to file and print log file path in terminal (default: True if not set).",
+        help="Log to file and print log file path in terminal (default: False).",
     )
     parser.add_argument(
         "--model-name",
@@ -50,7 +48,7 @@ def _add_export_arguments(parser):
         help=(
             "Model purpose: 'fe' (feature-extraction), 's2s' (seq2seq-lm),"
             " 'sc' (sequence-classification), 'ranker' (cross-encoder/ranking),"
-            " or 'llm' (causal-lm). Allowed values: fe, s2s, sc, llm, ranker (default: fe)"
+            " or 'llm' (causal-lm). (default: fe)"
         ),
     )
     parser.add_argument("--optimize", action="store_true", help="Whether to optimize the ONNX model")
@@ -58,8 +56,9 @@ def _add_export_arguments(parser):
         "--optimization-level",
         dest="optimization_level",
         type=int,
-        default=99,
-        help="ONNX optimization level (default: 99)",
+        choices=[0, 1, 2, 99],
+        default=None,
+        help="ONNX optimization level. Choices: 0, 1, 2, 99. Only valid with --optimize (default when optimizing: 99).",
     )
     parser.add_argument(
         "--task",
@@ -71,7 +70,8 @@ def _add_export_arguments(parser):
     parser.add_argument(
         "--onnx-path",
         dest="onnx_path",
-        help="Path to ONNX output directory (default: ../onnx or ONNX_PATH env var)",
+        default=None,
+        help=("Path to ONNX output directory. " "Defaults to the ONNX_PATH environment variable, or 'onnx' under the current working directory."),
     )
     parser.add_argument(
         "--framework",
@@ -120,7 +120,7 @@ def _add_export_arguments(parser):
         type=str,
         default=None,
         choices=["dynamic_int8", "fp16", "both"],
-        help=("Optional quantization to produce post-export variants. " "Choices: 'dynamic_int8', 'fp16', or 'both'."),
+        help="Optional quantization to produce post-export variants. Choices: 'dynamic_int8', 'fp16', or 'both'.",
     )
     parser.add_argument(
         "--pack-single-file",
@@ -134,16 +134,6 @@ def _add_export_arguments(parser):
         action="store_true",
         default=False,
         help="Enable external data format; prefer single-file ONNX when possible.",
-    )
-    parser.add_argument(
-        "--pack-single-threshold-mb",
-        dest="pack_single_threshold_mb",
-        type=int,
-        default=None,
-        help=(
-            "Size threshold in MB for single-file repack. If external weights exceed the"
-            " threshold, repack is skipped. If omitted, exporter default (1536 MB) is used."
-        ),
     )
     parser.add_argument(
         "--no-local-prep",
@@ -174,9 +164,7 @@ def _add_export_arguments(parser):
         action="store_true",
         help=(
             "Request model merging where applicable. Merge is only applicable to "
-            "decoder-only causal LLMs that support text-generation-with-past (KV-cache). "
-            "No merging is performed after optimization; the exporter will apply merging "
-            "at the appropriate stage. Use this flag to request a merged decoder artifact."
+            "decoder-only causal LLMs that support text-generation-with-past (KV-cache)."
         ),
     )
     parser.add_argument(
@@ -206,11 +194,7 @@ def _add_export_arguments(parser):
         "--use-sub-process",
         dest="use_subprocess",
         action="store_true",
-        help=(
-            "Prefer running exporter in a subprocess (inverse default). "
-            "By default the exporter will try in-process first; set this flag "
-            "to force subprocess use."
-        ),
+        help=("Force running exporter in a subprocess. " "By default the exporter will try in-process first; set this flag to force subprocess use."),
     )
     parser.add_argument(
         "--use-fallback-if-failed",
@@ -222,7 +206,7 @@ def _add_export_arguments(parser):
         "--low-memory-env",
         dest="low_memory_env",
         action="store_true",
-        help="Treat the environment as low-memory and apply conservative export flags (use external_data, disable some post-processing).",
+        help="Treat the environment as low-memory and apply conservative export flags.",
     )
 
 
@@ -243,12 +227,34 @@ def _build_export_parser(add_help=True, description="Export and optimize ONNX mo
     return parser
 
 
+def _validate_export_args(args, parser):
+    """Reject option combinations that cannot affect the requested export."""
+    if not args.optimize and args.optimization_level is not None:
+        parser.error("--optimization-level requires --optimize.")
+    if args.portable and not args.optimize:
+        parser.error("--portable requires --optimize.")
+    if args.prune_canonical and not args.cleanup:
+        parser.error("--prune-canonical requires --cleanup.")
+    if args.skip_validator and args.require_validator:
+        parser.error("--skip-validator cannot be combined with --require-validator.")
+    if args.skip_validator and args.normalize_embeddings:
+        parser.error("--normalize-embeddings requires validator execution; remove --skip-validator.")
+    if args.low_memory_env and args.use_external_data_format:
+        parser.error("--low-memory-env already enables external data format; remove --use-external-data-format.")
+    if args.low_memory_env and args.no_post_process:
+        parser.error("--low-memory-env already disables post-processing; remove --no-post-process.")
+    if args.model_for != "llm" and args.no_local_prep:
+        parser.error("--no-local-prep is only valid with --model-for llm.")
+    if args.model_for != "llm" and args.merge:
+        parser.error("--merge is only valid with --model-for llm.")
+
+
 def _execute_export_kwargs(unified_kwargs, parser):
     """Validate *unified_kwargs* against the exporter signature and call it.
 
     Checks that every key in *unified_kwargs* is a known parameter of
-    :func:`export_unified` (when the function does not accept ``**kwargs``).
-    Normalises the ``quantize`` value, then invokes the exporter.
+    :func:`export_unified`. Normalises the ``quantize`` value, then invokes
+    the exporter.
 
     Args:
         unified_kwargs: Keyword arguments to forward to :func:`export_unified`.
@@ -271,7 +277,7 @@ def _execute_export_kwargs(unified_kwargs, parser):
             ]
             invalid = [k for k in unified_kwargs.keys() if k not in allowed]
             if invalid:
-                reason = "Possible typos or use of removed underscore-style aliases. " "Check flag names and use hyphenated forms."
+                reason = "Possible typos or use of removed underscore-style aliases. Check flag names and use hyphenated forms."
                 parser.error(
                     f"Invalid parameter name(s) passed to exporter: {', '.join(invalid)}. " f"Allowed parameters: {', '.join(allowed)}. {reason}"
                 )
@@ -292,8 +298,8 @@ def _execute_export_kwargs(unified_kwargs, parser):
 def _run_export(args, parser):
     """Translate parsed *args* into exporter kwargs and run the export.
 
-    Resolves ``onnx_path`` (from arg, env var, or default), assembles all
-    export parameters into a dict, and delegates to
+    Resolves ``onnx_path`` (from arg or env var; pipeline handles the default),
+    assembles all export parameters into a dict, and delegates to
     :func:`_execute_export_kwargs`.
 
     Args:
@@ -301,41 +307,14 @@ def _run_export(args, parser):
         parser: The :class:`argparse.ArgumentParser`; forwarded for error
             reporting inside :func:`_execute_export_kwargs`.
     """
-    onnx_path = args.onnx_path or os.getenv("ONNX_PATH", _default_onnx_path)
-    print(f"Using ONNX path: {os.path.abspath(onnx_path)}")
+    _validate_export_args(args, parser)
 
-    unified_kwargs = {
-        "model_name": args.model_name,
-        "model_for": args.model_for,
-        "optimize": args.optimize,
-        "optimization_level": args.optimization_level,
-        "portable": args.portable,
-        "model_folder": args.model_folder,
-        "onnx_path": onnx_path,
-        "task": args.task,
-        "force": args.force,
-        "opset_version": (args.opset_version if hasattr(args, "opset_version") else None),
-        "pack_single_file": args.pack_single_file,
-        "use_external_data_format": args.use_external_data_format,
-        "framework": args.framework,
-        "pack_single_threshold_mb": args.pack_single_threshold_mb,
-        "require_validator": args.require_validator,
-        "trust_remote_code": args.trust_remote_code,
-        "normalize_embeddings": args.normalize_embeddings,
-        "skip_validator": args.skip_validator,
-        "device": args.device,
-        "hf_token": args.hf_token,
-        "library": args.library,
-        "merge": args.merge,
-        "cleanup": args.cleanup,
-        "prune_canonical": args.prune_canonical,
-        "no_post_process": args.no_post_process,
-        "no_local_prep": args.no_local_prep,
-        "use_subprocess": args.use_subprocess,
-        "use_fallback_if_failed": args.use_fallback_if_failed,
-        "low_memory_env": args.low_memory_env,
-        "quantize": None,
-        "log_to_file": args.log_to_file,
-    }
+    # Pass onnx_path=None when not supplied so the pipeline applies its own
+    # default (cwd-relative "onnx" or ONNX_PATH env var).
+    onnx_path = args.onnx_path or os.getenv("ONNX_PATH") or None
+    if onnx_path:
+        print(f"Using ONNX path: {os.path.abspath(onnx_path)}")
+
+    unified_kwargs = ExportConfig.from_namespace(args, onnx_path).to_kwargs()
 
     _execute_export_kwargs(unified_kwargs, parser)

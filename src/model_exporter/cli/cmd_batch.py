@@ -75,18 +75,20 @@ def _add_batch_arguments(parser):
         help="Apply --skip-validator to all batch exports.",
     )
     parser.add_argument("--optimize", action="store_true", help="Apply --optimize to all batch exports.")
+    parser.add_argument(
+        "--optimization-level",
+        dest="optimization_level",
+        type=int,
+        choices=[0, 1, 2, 99],
+        default=None,
+        help="Apply --optimization-level to all batch exports.",
+    )
     parser.add_argument("--cleanup", action="store_true", help="Apply --cleanup to all batch exports.")
     parser.add_argument(
         "--prune-canonical",
         dest="prune_canonical",
         action="store_true",
         help="Apply --prune-canonical to all batch exports.",
-    )
-    parser.add_argument(
-        "--no-local-prep",
-        dest="no_local_prep",
-        action="store_true",
-        help="Apply --no-local-prep to all batch exports.",
     )
     parser.add_argument(
         "--portable",
@@ -254,10 +256,10 @@ def _export_config_to_argv(config):
         "model_folder": "--model-folder",
         "onnx_path": "--onnx-path",
         "framework": "--framework",
+        "optimization_level": "--optimization-level",
         "opset_version": "--opset-version",
         "device": "--device",
         "quantize": "--quantize",
-        "pack_single_threshold_mb": "--pack-single-threshold-mb",
         "hf_token": "--hf-token",
         "library": "--library",
     }
@@ -294,6 +296,34 @@ def _export_config_to_argv(config):
     return argv
 
 
+def _validate_batch_args(args, parser, preset_items=None):
+    """Validate batch-level overrides before exports start."""
+    if args.optimization_level is not None and not args.optimize:
+        parser.error("--optimization-level requires --optimize.")
+    if args.portable and not args.optimize:
+        parser.error("--portable requires --optimize.")
+    if args.prune_canonical and not args.cleanup:
+        parser.error("--prune-canonical requires --cleanup.")
+
+    if not args.skip_validator or preset_items is None:
+        return
+
+    validator_required = []
+    for preset in preset_items:
+        if preset.get("skip", False):
+            continue
+        if preset.get("normalize_embeddings") or preset.get("require_validator"):
+            validator_required.append(preset.get("model_name", "<unknown>"))
+
+    if validator_required:
+        affected = ", ".join(validator_required)
+        parser.error(
+            "--skip-validator cannot be applied globally when active batch entries "
+            "request validator-only options. Remove the per-entry validator options "
+            f"or skip those entries. Affected: {affected}"
+        )
+
+
 def _run_batch(args, parser):
     """Execute a named batch preset, exporting each model in sequence.
 
@@ -307,8 +337,10 @@ def _run_batch(args, parser):
         parser: The root :class:`argparse.ArgumentParser` (used for error
             reporting).
     """
+    _validate_batch_args(args, parser)
     export_parser = _build_export_parser(add_help=False)
     preset_items = _get_batch_preset(args.preset, args.config)
+    _validate_batch_args(args, parser, preset_items)
 
     print("======================================")
     print(f"Starting batch preset: {args.preset}")
@@ -327,9 +359,9 @@ def _run_batch(args, parser):
         "force": args.force,
         "skip_validator": args.skip_validator,
         "optimize": args.optimize,
+        "optimization_level": args.optimization_level,
         "cleanup": args.cleanup,
         "prune_canonical": args.prune_canonical,
-        "no_local_prep": args.no_local_prep,
         "portable": args.portable,
         "use_subprocess": args.use_subprocess,
         "log_to_file": args.log_to_file,

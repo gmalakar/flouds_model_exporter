@@ -94,45 +94,77 @@ def run_legacy_v1_fallback(
     if trust_remote_code:
         base_kwargs["trust_remote_code"] = True
 
-    attempts: list[tuple[str, dict[str, Any]]] = [
-        ("legacy_base", dict(base_kwargs)),
+    attempts: list[tuple[str, dict[str, Any], bool]] = [
+        ("legacy_base", dict(base_kwargs), False),
         (
-            "legacy_opset14_trust",
+            "legacy_opset14",
             {
                 **dict(base_kwargs),
                 "opset": 14,
-                "trust_remote_code": True,
             },
+            False,
         ),
         (
-            "legacy_opset11_trust",
+            "legacy_opset11_external",
             {
                 **dict(base_kwargs),
                 "opset": 11,
-                "trust_remote_code": True,
                 "use_external_data_format": True,
             },
+            False,
         ),
     ]
 
-    # Final attempt: clone/copy model to local temp and retry conservatively.
-    clone_path, _ = _prepare_clone_source(export_source, logger)
-    if clone_path:
-        attempts.append(
-            (
-                "legacy_local_clone",
-                {
-                    **dict(base_kwargs),
-                    "model_name_or_path": clone_path,
-                    "trust_remote_code": True,
-                    "opset": 11,
-                    "use_external_data_format": True,
-                },
-            )
+    if trust_remote_code:
+        attempts.extend(
+            [
+                (
+                    "legacy_opset14_trust",
+                    {
+                        **dict(base_kwargs),
+                        "opset": 14,
+                        "trust_remote_code": True,
+                    },
+                    False,
+                ),
+                (
+                    "legacy_opset11_trust",
+                    {
+                        **dict(base_kwargs),
+                        "opset": 11,
+                        "trust_remote_code": True,
+                        "use_external_data_format": True,
+                    },
+                    False,
+                ),
+            ]
         )
 
+    attempts.append(("legacy_local_clone", dict(base_kwargs), True))
+
+    clone_path: Optional[str] = None
     try:
-        for attempt_name, kwargs_try in attempts:
+        for attempt_name, kwargs_try, requires_clone in attempts:
+            if requires_clone:
+                clone_path, clone_error = _prepare_clone_source(export_source, logger)
+                if not clone_path:
+                    safe_log(
+                        logger,
+                        "warning",
+                        "Skipping legacy fallback '%s': %s",
+                        attempt_name,
+                        clone_error,
+                    )
+                    continue
+                kwargs_try = {
+                    **dict(kwargs_try),
+                    "model_name_or_path": clone_path,
+                    "opset": 11,
+                    "use_external_data_format": True,
+                }
+                if trust_remote_code:
+                    kwargs_try["trust_remote_code"] = True
+
             safe_log(
                 logger,
                 "info",

@@ -124,7 +124,27 @@ jobs:
         run: |
           set -euo pipefail
           disallowed='--model_for|--trust_remote_code|--opset_version|--model_dir|--reference_model|onnx_exporter/run_exports.ps1'
-          if git grep -nE "$disallowed" -- '*.md' '*.txt' '*.ps1'; then
+          if git grep -nE -e "$disallowed" -- '*.md' '*.txt' '*.ps1'; then
             echo "Found disallowed legacy CLI flags or stale script paths."
             exit 1
           fi
+
+      - name: Validate wrapper script syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n run_exports.sh
+          if command -v pwsh >/dev/null 2>&1; then
+            pwsh -NoProfile -File - <<'PS'
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile("run_exports.ps1", [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) {
+              $errors | Format-List
+              exit 1
+          }
+          PS
+          fi
+
+      - name: Check mirrored runtime requirements
+        run: python tools/check_dependency_sync.py

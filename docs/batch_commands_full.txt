@@ -1,6 +1,6 @@
 # Full batch command template.
 # This file preserves the original commented/active state from the provided block.
-# Lines beginning with # are ignored by run_exports.ps1 when used with -TextFile.
+# Lines beginning with # are ignored by the wrappers when used in text-file mode.
 # Commands use the current batch-compatible CLI format.
 
 # -------------------------
@@ -23,8 +23,8 @@ flouds-export export --model-for fe --model-name BAAI/bge-base-en-v1.5 --task fe
 
 # flouds-export export --model-for s2s --model-name t5-small --task seq2seq-lm --library transformers
 # flouds-export export --model-for s2s --model-name t5-base --task seq2seq-lm --library transformers
-# flouds-export export --model-for s2s --model-name Flan-T5-base --task seq2seq-lm --library transformers
-# flouds-export export --model-for s2s --model-name Flan-T5-Small --task seq2seq-lm --library transformers
+# flouds-export export --model-for s2s --model-name google/flan-t5-base --task seq2seq-lm --library transformers
+# flouds-export export --model-for s2s --model-name google/flan-t5-small --task seq2seq-lm --library transformers
 # flouds-export export --model-for s2s --model-name facebook/bart-large-cnn --task seq2seq-lm --pack-single-file --library transformers --opset-version 18
 
 # flouds-export export --model-for llm --model-name TinyLlama/TinyLlama-1.1B-Chat-v1.0 --task text-generation-with-past --library transformers --opset-version 18 --merge

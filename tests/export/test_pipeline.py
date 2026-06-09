@@ -191,3 +191,77 @@ def test_run_export_with_fallback_skips_legacy_when_flag_disabled(monkeypatch, t
     assert called["legacy"] is False
     assert ok is False
     assert used_trust is False
+
+
+def test_auto_resolve_trust_remote_code_does_not_auto_enable(monkeypatch):
+    from model_exporter.export import pipeline_helpers
+
+    warnings: list[str] = []
+    logger = SimpleNamespace(
+        warning=lambda message, *args: warnings.append(message % args),
+        debug=lambda *args, **kwargs: None,
+    )
+
+    monkeypatch.setattr(pipeline_helpers, "_requires_trust_remote_code_fast", lambda *args: True)
+
+    result = pipeline_helpers._auto_resolve_trust_remote_code("some/model", None, False, logger)
+
+    assert result is False
+    assert "trust_remote_code" in warnings[0]
+    assert "not explicitly allowed" in warnings[0]
+
+
+def test_legacy_fallback_does_not_force_trust_remote_code(monkeypatch, tmp_path):
+    from model_exporter.export import legacy_fallback
+
+    attempts: list[dict[str, Any]] = []
+
+    def _fake_export(kwargs):
+        attempts.append(dict(kwargs))
+        return False, "failed"
+
+    monkeypatch.setattr(legacy_fallback, "_run_inprocess_main_export", _fake_export)
+    monkeypatch.setattr(legacy_fallback, "_prepare_clone_source", lambda *args: (None, "offline"))
+
+    ok, used_trust = legacy_fallback.run_legacy_v1_fallback(
+        export_source="some/model",
+        output_dir=str(tmp_path),
+        model_for="llm",
+        opset_version=17,
+        device="cpu",
+        task="feature-extraction",
+        framework="pt",
+        library=None,
+        logger=logging.getLogger("test-legacy-trust"),
+        trust_remote_code=False,
+    )
+
+    assert ok is False
+    assert used_trust is False
+    assert attempts
+    assert all("trust_remote_code" not in attempt for attempt in attempts)
+
+
+def test_export_from_config_forwards_normalized_kwargs(monkeypatch):
+    from model_exporter.export import pipeline
+    from model_exporter.export.options import ExportConfig
+
+    captured: dict[str, Any] = {}
+
+    def _fake_export(**kwargs):
+        captured.update(kwargs)
+        return "exported"
+
+    monkeypatch.setattr(pipeline, "export", _fake_export)
+
+    result = pipeline.export_from_config(
+        ExportConfig(
+            model_name="org/model",
+            task="feature-extraction",
+            quantize="both",
+        )
+    )
+
+    assert result == "exported"
+    assert captured["model_name"] == "org/model"
+    assert captured["quantize"] is True

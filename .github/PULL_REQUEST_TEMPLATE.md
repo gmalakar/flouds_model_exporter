@@ -14,13 +14,14 @@ Describe what changed and why.
 
 - [ ] I ran `pre-commit run --all-files`
 - [ ] I ran `pytest -q`
+- [ ] I ran `python tools/check_dependency_sync.py` if dependencies changed
 - [ ] I updated docs for user-visible behavior changes
 
 ## Checklist
 
 - [ ] No secrets or tokens were added
 - [ ] CLI flags and examples use canonical hyphenated names only
-- [ ] Dependency changes are reflected in `requirements-prod.txt` and/or `requirements-dev.txt`
+- [ ] Dependency changes are reflected in `pyproject.toml`, `requirements-prod.txt`, and/or `requirements-dev.txt`
 
 ## Related Issues
 

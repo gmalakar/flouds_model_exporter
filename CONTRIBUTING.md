@@ -27,12 +27,15 @@ Thanks for your interest in contributing to flouds_model_exporter.
   - `pre-commit run --all-files`
 - Run tests:
   - `pytest -q`
+- Check runtime dependency mirrors:
+  - `python tools/check_dependency_sync.py`
 
 ## Pull request checklist
 
 - [ ] Code follows existing style and naming conventions.
 - [ ] New and changed behavior is documented.
 - [ ] Relevant tests pass locally.
+- [ ] Dependency mirror check passes if dependencies changed.
 - [ ] No secrets or tokens are included.
 - [ ] Commit messages are clear and scoped.
 

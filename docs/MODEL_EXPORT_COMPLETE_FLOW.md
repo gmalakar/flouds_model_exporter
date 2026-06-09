@@ -24,23 +24,28 @@ python -m model_exporter.cli.main export --help
 ## Current Package Layout
 
 ```text
-src/model_exporter/ (also available via `src/model_exporter/` alias)
-├── cli/
-│   ├── main.py
-│   ├── cmd_export.py
-│   ├── cmd_validate.py
-│   ├── cmd_optimize.py
-│   └── cmd_batch.py
-├── config/
-│   ├── logging.py
-│   └── policy.yaml
-├── export/
-│   ├── pipeline.py
-│   ├── optimizer.py
-│   ├── helpers.py
-│   └── subprocess_runner.py
-├── utils/
-└── validation/
+src/model_exporter/
++-- cli/
+|   +-- main.py
+|   +-- cmd_export.py
+|   +-- cmd_validate.py
+|   +-- cmd_optimize.py
+|   +-- cmd_batch.py
++-- config/
+|   +-- logging.py
+|   +-- policy.yaml
++-- export/
+|   +-- pipeline.py
+|   +-- pipeline_helpers.py
+|   +-- pipeline_v2.py
+|   +-- legacy_fallback.py
+|   +-- optimizer.py
+|   +-- helpers.py
+|   +-- options.py
+|   +-- path_utils.py
+|   +-- subprocess_runner.py
++-- utils/
++-- validation/
 ```
 
 ## End-to-End Flow
@@ -139,11 +144,11 @@ The batch runner reads presets from `src/model_exporter/config/policy.yaml`.
 
 ```text
 onnx/models/
-├── fe/
-├── s2s/
-├── sc/
-├── ranker/
-└── llm/
++-- fe/
++-- s2s/
++-- sc/
++-- ranker/
++-- llm/
 ```
 
 Typical outputs:
@@ -203,7 +208,7 @@ flouds-export export --model-name microsoft/Phi-3.5-mini-instruct --model-for ll
 | Validation mismatch | Re-run without optimization first, then compare with `--normalize-embeddings` when applicable. |
 | Remote-code requirement | Add `--trust-remote-code` only after reviewing the model repository. |
 
-Logs are written under `logs/onnx_exports/` unless overridden by `FLOUDS_LOG_DIR`.
+Logs go to the terminal by default. When `--log-to-file` is enabled, file logs are written under `logs/onnx_exports/` in the current working directory unless overridden by `FLOUDS_LOG_DIR`.
 
 ## Related Docs
 

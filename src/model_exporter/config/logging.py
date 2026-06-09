@@ -76,6 +76,8 @@ def setup_export_logging(
     """
     If `log_to_file` is True, log to file and print the log file path in terminal.
     If `log_to_file` is False, log only to terminal (stdout/stderr), no file is created.
+    File logs are written under FLOUDS_LOG_DIR when set, otherwise
+    ./logs/onnx_exports relative to the current working directory.
     Returns: (file_handler, logfile_fd, old_stdout, old_stderr, logfile_path or None)
     """
     import os
@@ -88,7 +90,12 @@ def setup_export_logging(
     logfile = None
 
     if log_to_file:
-        logs_dir = Path(base_dir).parent / "logs" / "onnx_exports"
+        del base_dir
+        configured_log_dir = os.getenv("FLOUDS_LOG_DIR")
+        if configured_log_dir:
+            logs_dir = Path(configured_log_dir).expanduser()
+        else:
+            logs_dir = Path.cwd() / "logs" / "onnx_exports"
         logs_dir.mkdir(parents=True, exist_ok=True)
         ts = time.strftime("%Y%m%d-%H%M%S")
         logfile = logs_dir / f"{safe_model}_{rev_tag}_{ts}.log"
