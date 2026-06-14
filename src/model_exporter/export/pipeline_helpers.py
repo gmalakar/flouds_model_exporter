@@ -365,9 +365,10 @@ def _cleanup_memory_caches(
         try:
             import psutil
 
-            available_gb = psutil.virtual_memory().available / (1024**3)
+            measured_available_gb = float(psutil.virtual_memory().available / (1024**3))
+            available_gb = measured_available_gb
             logger.info("Available memory before export: %.2f GB", available_gb)
-            if min_free_memory_gb is not None and available_gb < float(min_free_memory_gb):
+            if min_free_memory_gb is not None and measured_available_gb < float(min_free_memory_gb):
                 threshold_met = False
                 message = "Available memory %.2f GB is below threshold %.2f GB"
                 if require_sufficient_memory:

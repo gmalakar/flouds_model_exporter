@@ -12,7 +12,6 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any
 
-
 MODEL_FOR_DEFAULTS: dict[str, dict[str, str]] = {
     "fe": {"task": "feature-extraction", "library": "transformers"},
     "s2s": {"task": "seq2seq-lm", "library": "transformers"},

@@ -152,10 +152,7 @@ def _add_export_arguments(parser):
         type=str,
         default=None,
         required=False,
-        help=(
-            "Export library hint (e.g., 'sentence_transformers' or 'transformers'). "
-            "Defaults from --model-for when omitted."
-        ),
+        help=("Export library hint (e.g., 'sentence_transformers' or 'transformers'). " "Defaults from --model-for when omitted."),
     )
     parser.add_argument(
         "--merge",

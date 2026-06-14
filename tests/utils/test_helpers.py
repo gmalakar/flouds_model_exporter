@@ -1,3 +1,11 @@
+# =============================================================================
+# File: test_helpers.py
+# Date Created: 2026-06-14
+# Date Updated: 2026-06-14
+# Copyright (c) 2026 Goutam Malakar.
+# SPDX-License-Identifier: Apache-2.0
+# =============================================================================
+
 import importlib
 import logging
 import sys

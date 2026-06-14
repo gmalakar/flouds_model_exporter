@@ -252,6 +252,7 @@ def test_setup_huggingface_hub_token_reads_env_without_writing_it(monkeypatch):
     assert token == "hf_env"
     assert os.environ["HUGGINGFACE_HUB_TOKEN"] == "hf_env"
 
+
 def test_legacy_fallback_does_not_force_trust_remote_code(monkeypatch, tmp_path):
     from model_exporter.export import legacy_fallback
 
