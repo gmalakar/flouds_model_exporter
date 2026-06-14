@@ -30,7 +30,7 @@ dependencies = [
 	"optimum-onnx[onnxruntime]>=0.1.0",
 	"numpy>=1.26.4,<1.27",
 	"huggingface_hub[hf_xet]>=0.34.0,<1.0",
-	"psutil==5.9.8",
+	"psutil==7.2.2",
 	"protobuf>=4.25.3",
 	"PyYAML>=6.0",
 ]
