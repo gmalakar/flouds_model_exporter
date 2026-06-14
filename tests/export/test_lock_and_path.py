@@ -64,14 +64,14 @@ def _make_fake_modules(monkeypatch):
     fake_pipeline_helpers._auto_resolve_trust_remote_code = lambda *a, **kw: False
     fake_pipeline_helpers._build_expected_list = lambda *a, **kw: ["model.onnx"]
     fake_pipeline_helpers._check_optimized_artifacts = lambda *a, **kw: False
-    fake_pipeline_helpers._cleanup_memory_caches = lambda *a, **kw: None
+    fake_pipeline_helpers._cleanup_memory_caches = lambda *a, **kw: (None, True)
     fake_pipeline_helpers._is_seq2seq = lambda *a, **kw: False
     fake_pipeline_helpers._lift_temp_local_artifacts = lambda *a, **kw: None
     fake_pipeline_helpers._resolve_use_cache = lambda *a, **kw: False
     fake_pipeline_helpers._run_numeric_validator = lambda *a, **kw: (0, True)
     fake_pipeline_helpers._run_quantization_step = lambda *a, **kw: None
-    fake_pipeline_helpers._setup_hf_token = lambda *a, **kw: (None, {})
-    fake_pipeline_helpers._teardown_hf_token = lambda *a, **kw: None
+    fake_pipeline_helpers._setup_huggingface_hub_token = lambda *a, **kw: (None, {})
+    fake_pipeline_helpers._teardown_huggingface_hub_token = lambda *a, **kw: None
     fake_pipeline_helpers._should_skip_validator = lambda *a, **kw: True
     fake_pipeline_helpers._with_export_lock = _fake_lock
 
@@ -224,8 +224,8 @@ def test_resolved_output_dir_stays_under_model_type_root(monkeypatch, tmp_path):
     assert model_folder == "mymodel"
 
 
-def test_low_memory_env_applies_conservative_export_flags(monkeypatch, tmp_path):
-    """low_memory_env should force external_data and skip post-processing."""
+def test_memory_threshold_applies_conservative_export_flags(monkeypatch, tmp_path):
+    """Low available RAM should force conservative export flags when a threshold is set."""
     pipeline = _make_fake_modules(monkeypatch)
     captured: dict[str, Any] = {}
 
@@ -233,6 +233,7 @@ def test_low_memory_env_applies_conservative_export_flags(monkeypatch, tmp_path)
         captured.update(kwargs)
         return True, False
 
+    monkeypatch.setattr(pipeline, "_cleanup_memory_caches", lambda *a, **kw: (1.0, False))
     monkeypatch.setattr(pipeline, "_run_export_with_fallback", _capture_export)
     monkeypatch.chdir(tmp_path)
 
@@ -240,11 +241,31 @@ def test_low_memory_env_applies_conservative_export_flags(monkeypatch, tmp_path)
         model_name="org/mymodel",
         model_for="fe",
         task="feature-extraction",
-        low_memory_env=True,
+        min_free_memory_gb=4.0,
     )
 
     assert captured["use_external_data_format"] is True
     assert captured["no_post_process"] is True
+
+
+def test_memory_threshold_can_fail_fast(monkeypatch, tmp_path):
+    """require_sufficient_memory should fail before export when threshold is unmet."""
+    pipeline = _make_fake_modules(monkeypatch)
+
+    def _raise_low_memory(*args, **kwargs):
+        raise RuntimeError("Available memory 1.00 GB is below threshold 4.00 GB")
+
+    monkeypatch.setattr(pipeline, "_cleanup_memory_caches", _raise_low_memory)
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(RuntimeError, match="below threshold"):
+        pipeline.export(
+            model_name="org/mymodel",
+            model_for="fe",
+            task="feature-extraction",
+            min_free_memory_gb=4.0,
+            require_sufficient_memory=True,
+        )
 
 
 def test_public_api_export_importable_from_package():

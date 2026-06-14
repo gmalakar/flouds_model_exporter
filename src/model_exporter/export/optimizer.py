@@ -103,7 +103,7 @@ def optimize_if_encoder(
 
     Parameters
     - model_dir: Path or string path to the exported model folder.
-    - model_type: Model "for" string (e.g. "s2s", "sc", "llm"); used
+    - model_type: Model "for" string (e.g. "fe", "s2s", "ranker", "llm"); used
         to skip decoder-only models.
     - logger: A ``logging.Logger`` instance for logging messages.
     - optimization_level: One of {0, 1, 2, 99} controlling optimizer

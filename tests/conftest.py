@@ -70,15 +70,11 @@ def cli_module(monkeypatch: pytest.MonkeyPatch, repo_root: Path) -> tuple[Any, d
                         {
                             "model_name": "BAAI/bge-base-en-v1.5",
                             "model_for": "fe",
-                            "task": "feature-extraction",
-                            "library": "transformers",
                             "normalize_embeddings": True,
                         },
                         {
                             "model_name": "cross-encoder/ms-marco-MiniLM-L-12-v2",
                             "model_for": "ranker",
-                            "task": "sequence-classification",
-                            "library": "transformers",
                             "optimize": True,
                         },
                     ]

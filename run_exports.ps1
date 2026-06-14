@@ -187,8 +187,9 @@ function Parse-ExportLine {
             '--optimization-level' { if ($i + 1 -lt $tokens.Count) { $entry.optimization_level = [int]$tokens[++$i] } else { throw "Missing value for $token" } }
             '--opset-version' { if ($i + 1 -lt $tokens.Count) { $entry.opset_version = [int]$tokens[++$i] } else { throw "Missing value for $token" } }
             '--device' { if ($i + 1 -lt $tokens.Count) { $entry.device = $tokens[++$i] } else { throw "Missing value for $token" } }
+            '--min-free-memory-gb' { if ($i + 1 -lt $tokens.Count) { $entry.min_free_memory_gb = [double]$tokens[++$i] } else { throw "Missing value for $token" } }
             '--quantize' { if ($i + 1 -lt $tokens.Count) { $entry.quantize = $tokens[++$i] } else { throw "Missing value for $token" } }
-            '--hf-token' { if ($i + 1 -lt $tokens.Count) { $entry.hf_token = $tokens[++$i] } else { throw "Missing value for $token" } }
+            '--huggingface_hub_token' { if ($i + 1 -lt $tokens.Count) { $entry.huggingface_hub_token = $tokens[++$i] } else { throw "Missing value for $token" } }
             '--library' { if ($i + 1 -lt $tokens.Count) { $entry.library = $tokens[++$i] } else { throw "Missing value for $token" } }
 
             '--optimize' { $entry.optimize = $true }
@@ -206,7 +207,7 @@ function Parse-ExportLine {
             '--no-post-process' { $entry.no_post_process = $true }
             '--portable' { $entry.portable = $true }
             '--use-sub-process' { $entry.use_subprocess = $true }
-            '--low-memory-env' { $entry.low_memory_env = $true }
+            '--require-sufficient-memory' { $entry.require_sufficient_memory = $true }
             '--log-to-file' { $entry.log_to_file = $true }
             default {
                 if ($token.StartsWith('--')) {

@@ -76,7 +76,7 @@ def setup_export_logging(
     """
     If `log_to_file` is True, log to file and print the log file path in terminal.
     If `log_to_file` is False, log only to terminal (stdout/stderr), no file is created.
-    File logs are written under FLOUDS_LOG_DIR when set, otherwise
+    File logs are written under LOG_DIR when set, otherwise
     ./logs/onnx_exports relative to the current working directory.
     Returns: (file_handler, logfile_fd, old_stdout, old_stderr, logfile_path or None)
     """
@@ -91,7 +91,7 @@ def setup_export_logging(
 
     if log_to_file:
         del base_dir
-        configured_log_dir = os.getenv("FLOUDS_LOG_DIR")
+        configured_log_dir = os.getenv("LOG_DIR")
         if configured_log_dir:
             logs_dir = Path(configured_log_dir).expanduser()
         else:
@@ -102,8 +102,8 @@ def setup_export_logging(
         file_handler = logging.handlers.RotatingFileHandler(str(logfile), maxBytes=20 * 1024 * 1024, backupCount=5, encoding="utf-8")
         fmt = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
         file_handler.setFormatter(fmt)
-        env = os.getenv("FLOUDS_API_ENV", "").strip()
-        log_level = logging.DEBUG if env.lower() == "development" else logging.INFO
+        level_name = os.getenv("LOG_LEVEL", "INFO").strip().upper()
+        log_level = getattr(logging, level_name, logging.INFO)
         file_handler.setLevel(log_level)
         logger.addHandler(file_handler)
         logger.propagate = False

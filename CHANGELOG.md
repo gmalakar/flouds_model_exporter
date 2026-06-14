@@ -30,7 +30,7 @@ The format is based on Keep a Changelog.
 - Wrapper scripts now automatically use the repository `.venv` interpreter when present.
 - Added a CI check that keeps `requirements-prod.txt` synchronized with `pyproject.toml` runtime dependencies.
 - Updated docs, NOTICE, SECURITY, and MANIFEST metadata to match the current CLI, dependency, logging, and release workflows.
-- File logging now honors `FLOUDS_LOG_DIR` and otherwise writes to `./logs/onnx_exports` when explicitly enabled.
+- File logging now honors `LOG_DIR` and otherwise writes to `./logs/onnx_exports` when explicitly enabled.
 - Removed stale root release instructions, the obsolete legacy batch preset copy, and the redundant root header helper script.
 - Added GitHub issue forms and a pull request template.
 - Added maintainer guidance for branch protection and required checks in `docs/GITHUB_REPOSITORY_SETTINGS.md`.

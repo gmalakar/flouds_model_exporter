@@ -12,7 +12,7 @@ from __future__ import annotations
 import inspect
 import os
 
-from model_exporter.export.options import ExportConfig
+from model_exporter.export.options import MODEL_FOR_DEFAULTS, ExportConfig
 from model_exporter.export.pipeline import export as export_unified
 
 
@@ -44,11 +44,10 @@ def _add_export_arguments(parser):
         dest="model_for",
         type=str,
         default="fe",
-        choices=["fe", "s2s", "sc", "llm", "ranker"],
         help=(
             "Model purpose: 'fe' (feature-extraction), 's2s' (seq2seq-lm),"
-            " 'sc' (sequence-classification), 'ranker' (cross-encoder/ranking),"
-            " or 'llm' (causal-lm). (default: fe)"
+            " 'ranker' (cross-encoder/ranking), or 'llm' (causal-lm). "
+            "Defaults task/library based on this value. (default: fe)"
         ),
     )
     parser.add_argument("--optimize", action="store_true", help="Whether to optimize the ONNX model")
@@ -63,8 +62,8 @@ def _add_export_arguments(parser):
     parser.add_argument(
         "--task",
         type=str,
-        required=True,
-        help="Export task (e.g., seq2seq-lm, sequence-classification, feature-extraction) (required)",
+        default=None,
+        help="Export task. Defaults from --model-for when omitted.",
     )
     parser.add_argument("--model-folder", dest="model_folder", help="HuggingFace model folder or path")
     parser.add_argument(
@@ -141,11 +140,11 @@ def _add_export_arguments(parser):
         help="Skip creating a prepared local copy (temp_local) for LLMs before export",
     )
     parser.add_argument(
-        "--hf-token",
-        dest="hf_token",
+        "--huggingface_hub_token",
+        dest="huggingface_hub_token",
         type=str,
         default=None,
-        help="HuggingFace access token (synonym for HUGGINGFACE_HUB_TOKEN/HF_TOKEN)",
+        help="Hugging Face access token. Defaults to HUGGINGFACE_HUB_TOKEN when omitted.",
     )
     parser.add_argument(
         "--library",
@@ -153,10 +152,7 @@ def _add_export_arguments(parser):
         type=str,
         default=None,
         required=False,
-        help=(
-            "Export library hint (e.g., 'sentence_transformers' or 'transformers'). "
-            "Optional — if omitted the exporter will attempt to infer the best library."
-        ),
+        help=("Export library hint (e.g., 'sentence_transformers' or 'transformers'). " "Defaults from --model-for when omitted."),
     )
     parser.add_argument(
         "--merge",
@@ -203,10 +199,17 @@ def _add_export_arguments(parser):
         help="Enable legacy fallback exporter only when the primary export path fails.",
     )
     parser.add_argument(
-        "--low-memory-env",
-        dest="low_memory_env",
+        "--min-free-memory-gb",
+        dest="min_free_memory_gb",
+        type=float,
+        default=None,
+        help="Minimum free RAM in GB required before export. Below this threshold, conservative low-memory export flags are applied.",
+    )
+    parser.add_argument(
+        "--require-sufficient-memory",
+        dest="require_sufficient_memory",
         action="store_true",
-        help="Treat the environment as low-memory and apply conservative export flags.",
+        help="Fail export when --min-free-memory-gb is not satisfied instead of continuing with low-memory flags.",
     )
 
 
@@ -231,6 +234,10 @@ def _validate_export_args(args, parser):
     """Reject option combinations that cannot affect the requested export."""
     if not args.optimize and args.optimization_level is not None:
         parser.error("--optimization-level requires --optimize.")
+    model_for = (args.model_for or "").lower()
+    if model_for not in MODEL_FOR_DEFAULTS:
+        expected = ", ".join(MODEL_FOR_DEFAULTS)
+        parser.error(f"Unknown --model-for value: {args.model_for!r}. Expected one of: {expected}.")
     if args.portable and not args.optimize:
         parser.error("--portable requires --optimize.")
     if args.prune_canonical and not args.cleanup:
@@ -239,10 +246,8 @@ def _validate_export_args(args, parser):
         parser.error("--skip-validator cannot be combined with --require-validator.")
     if args.skip_validator and args.normalize_embeddings:
         parser.error("--normalize-embeddings requires validator execution; remove --skip-validator.")
-    if args.low_memory_env and args.use_external_data_format:
-        parser.error("--low-memory-env already enables external data format; remove --use-external-data-format.")
-    if args.low_memory_env and args.no_post_process:
-        parser.error("--low-memory-env already disables post-processing; remove --no-post-process.")
+    if args.require_sufficient_memory and args.min_free_memory_gb is None:
+        parser.error("--require-sufficient-memory requires --min-free-memory-gb.")
     if args.model_for != "llm" and args.no_local_prep:
         parser.error("--no-local-prep is only valid with --model-for llm.")
     if args.model_for != "llm" and args.merge:

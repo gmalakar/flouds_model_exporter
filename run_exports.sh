@@ -122,8 +122,9 @@ value_map = {
     "--optimization-level": "optimization_level",
     "--opset-version": "opset_version",
     "--device": "device",
+    "--min-free-memory-gb": "min_free_memory_gb",
     "--quantize": "quantize",
-    "--hf-token": "hf_token",
+    "--huggingface_hub_token": "huggingface_hub_token",
     "--library": "library",
 }
 
@@ -143,7 +144,7 @@ flag_map = {
     "--no-post-process": "no_post_process",
     "--portable": "portable",
     "--use-sub-process": "use_subprocess",
-    "--low-memory-env": "low_memory_env",
+    "--require-sufficient-memory": "require_sufficient_memory",
     "--log-to-file": "log_to_file",
 }
 
@@ -194,7 +195,6 @@ with open(text_path, "r", encoding="utf-8") as handle:
         if "model_name" not in entry:
             continue
         entry.setdefault("model_for", "fe")
-        entry.setdefault("task", "feature-extraction")
         entries.append(entry)
 
 if not entries:

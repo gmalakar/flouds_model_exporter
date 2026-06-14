@@ -7,10 +7,11 @@
 # =============================================================================
 
 # HINTS:
-# - For summarization (BART, T5, Pegasus, etc.), use `--task seq2seq-lm`.
-#   KV-cache exports are auto-detected; supply `--task text2text-generation-with-past` to request KV-cache behavior.
-# - For sequence classification (BERT, RoBERTa, etc.), use --task sequence-classification.
-# - For embeddings/feature extraction, use --task feature-extraction
+# - `--model-for` supplies default task/library values: fe -> feature-extraction,
+#   s2s -> seq2seq-lm, ranker -> sequence-classification,
+#   llm -> text-generation-with-past.
+# - Supply `--task` only when you need an explicit task override, such as
+#   text2text-generation-with-past for seq2seq KV-cache behavior.
 # - After exporting a seq2seq model, you should see encoder_model.onnx, decoder_model.onnx, and decoder_with_past_model.onnx in the output directory.
 # - If decoder_with_past_model.onnx is missing, the model cannot be used for fast autoregressive generation (greedy decoding).
 # - Always verify ONNX model inputs/outputs after export to ensure compatibility with your inference pipeline.

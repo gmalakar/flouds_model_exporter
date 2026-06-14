@@ -663,23 +663,37 @@ def _attempt_inprocess_export(
                                 "Starting in-process main_export synchronously for diagnostics",
                             )
                             try:
-                                # If the caller passed the CLI flag `-low-memory-env` (becomes
-                                # `low_memory_env` in `me_kwargs`), apply conservative flags
-                                # unconditionally. Otherwise fall back to a local-directory
-                                # size check using `large_model_threshold_gb` (default 3.0 GB).
+                                # Apply conservative export flags for local
+                                # model directories above the size threshold.
                                 try:
-                                    low_mem_flag = me_kwargs.get("low_memory_env", False)
-                                    if isinstance(low_mem_flag, str):
-                                        low_mem_flag = low_mem_flag.strip().lower() in (
-                                            "1",
-                                            "true",
-                                            "yes",
+                                    threshold_gb = float(me_kwargs.get("large_model_threshold_gb", 3.0))
+                                    threshold_bytes = int(threshold_gb * 1024**3)
+
+                                    total_size = 0
+                                    try:
+                                        model_path = me_kwargs.get("model_name_or_path")
+                                        if isinstance(model_path, str) and os.path.exists(model_path) and os.path.isdir(model_path):
+                                            for _root, _dirs, files in os.walk(model_path):
+                                                for fname in files:
+                                                    try:
+                                                        fp = os.path.join(_root, fname)
+                                                        total_size += os.path.getsize(fp)
+                                                    except Exception:
+                                                        pass
+                                    except Exception as e:
+                                        safe_log(
+                                            logger,
+                                            "warning",
+                                            "Could not compute model directory size: %s",
+                                            e,
                                         )
-                                    if low_mem_flag:
+
+                                    if total_size >= threshold_bytes:
                                         safe_log(
                                             logger,
                                             "info",
-                                            "low-memory flag detected via CLI; applying large-export flags",
+                                            "Detected large model (%.2f GB); applying large-export flags",
+                                            total_size / (1024**3),
                                         )
                                         me_kwargs.update(
                                             {
@@ -693,54 +707,13 @@ def _attempt_inprocess_export(
                                             }
                                         )
                                     else:
-                                        threshold_gb = float(me_kwargs.get("large_model_threshold_gb", 3.0))
-                                        threshold_bytes = int(threshold_gb * 1024**3)
-
-                                        total_size = 0
-                                        try:
-                                            model_path = me_kwargs.get("model_name_or_path")
-                                            if isinstance(model_path, str) and os.path.exists(model_path) and os.path.isdir(model_path):
-                                                for _root, _dirs, files in os.walk(model_path):
-                                                    for fname in files:
-                                                        try:
-                                                            fp = os.path.join(_root, fname)
-                                                            total_size += os.path.getsize(fp)
-                                                        except Exception:
-                                                            pass
-                                        except Exception as e:
-                                            safe_log(
-                                                logger,
-                                                "warning",
-                                                "Could not compute model directory size: %s",
-                                                e,
-                                            )
-
-                                        if total_size >= threshold_bytes:
-                                            safe_log(
-                                                logger,
-                                                "info",
-                                                "Detected large model (%.2f GB); applying large-export flags",
-                                                total_size / (1024**3),
-                                            )
-                                            me_kwargs.update(
-                                                {
-                                                    "use_external_data_format": True,
-                                                    "external_data_size_threshold": 1024,
-                                                    "optimize": False,
-                                                    "use_subprocess": False,
-                                                    "no_subprocess": True,
-                                                    "disable_onnx_constant_folding": True,
-                                                    "safe_serialization": True,
-                                                }
-                                            )
-                                        else:
-                                            safe_log(
-                                                logger,
-                                                "debug",
-                                                "Model size %.2f GB < %.2f GB; skipping large-export flags",
-                                                (total_size / (1024**3) if total_size else 0.0),
-                                                threshold_gb,
-                                            )
+                                        safe_log(
+                                            logger,
+                                            "debug",
+                                            "Model size %.2f GB < %.2f GB; skipping large-export flags",
+                                            (total_size / (1024**3) if total_size else 0.0),
+                                            threshold_gb,
+                                        )
                                 except Exception:
                                     safe_log(
                                         logger,

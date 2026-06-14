@@ -54,7 +54,7 @@ flouds-export export --help
 
 ### Environment Variables
 
-Use environment variables to control default output location and Hugging Face authentication.
+Use environment variables to control default output location, Hugging Face authentication, and optional logging.
 
 #### ONNX_PATH
 
@@ -72,23 +72,59 @@ Linux/macOS (current shell):
 export ONNX_PATH="/path/to/onnx/models"
 ```
 
-#### HUGGINGFACE_TOKEN
+#### HUGGINGFACE_HUB_TOKEN
 
-`HUGGINGFACE_TOKEN` provides an access token for private/gated Hugging Face model downloads.
+`HUGGINGFACE_HUB_TOKEN` provides an access token for private/gated Hugging Face model downloads.
 
 Windows PowerShell (current session):
 
 ```powershell
-$Env:HUGGINGFACE_TOKEN = "hf_xxx_your_token"
+$Env:HUGGINGFACE_HUB_TOKEN = "hf_xxx_your_token"
 ```
 
 Linux/macOS (current shell):
 
 ```bash
-export HUGGINGFACE_TOKEN="hf_xxx_your_token"
+export HUGGINGFACE_HUB_TOKEN="hf_xxx_your_token"
 ```
 
-You can also pass a token directly per command with `--hf-token`.
+You can also pass a token directly per command with `--huggingface_hub_token`.
+
+#### LOG_DIR
+
+`LOG_DIR` sets the directory for per-export log files when `--log-to-file` or
+`log_to_file=True` is enabled. If omitted, logs are written to
+`./logs/onnx_exports`.
+
+#### LOG_LEVEL
+
+`LOG_LEVEL` controls console and file log verbosity. Common values are `INFO`
+and `DEBUG`.
+
+#### Runtime/Internal Variables
+
+These variables are normally managed by the exporter or the host shell. Set them
+manually only when debugging runtime behavior or working around platform limits.
+
+| Variable | How it is used |
+|----------|----------------|
+| `PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION` | Set to `python` by the exporter to avoid protobuf C-extension instability during export. |
+| `PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION_VERSION` | Set to `2` as a protobuf compatibility fallback when needed. |
+| `OMP_NUM_THREADS`, `MKL_NUM_THREADS`, `OPENBLAS_NUM_THREADS`, `NUMEXPR_NUM_THREADS` | Default to `1` during export/subprocess runs to reduce memory pressure and CPU oversubscription. Override before running only if you need different threading behavior. |
+| `TMP`, `TEMP`, `TMPDIR` | Used by Python and native libraries for temporary files. Subprocess exports may point these to an export-local temp folder. Set one of them to a large fast disk if your system temp drive is too small. |
+| `PYTHONPATH` | Set by the local wrapper scripts so source-checkout runs import `src/model_exporter` without installing the package. Installed package usage does not need it. |
+
+Examples:
+
+```powershell
+$Env:LOG_LEVEL = "DEBUG"
+$Env:TMP = "D:\model-export-temp"
+```
+
+```bash
+export LOG_LEVEL=DEBUG
+export TMPDIR=/mnt/large-temp
+```
 
 #### Persisting Variables
 
@@ -96,14 +132,14 @@ Windows (future terminals):
 
 ```powershell
 setx ONNX_PATH "C:\path\to\onnx\models"
-setx HUGGINGFACE_TOKEN "hf_xxx_your_token"
+setx HUGGINGFACE_HUB_TOKEN "hf_xxx_your_token"
 ```
 
 Linux/macOS (bash/zsh profile):
 
 ```bash
 echo 'export ONNX_PATH="/path/to/onnx/models"' >> ~/.bashrc
-echo 'export HUGGINGFACE_TOKEN="hf_xxx_your_token"' >> ~/.bashrc
+echo 'export HUGGINGFACE_HUB_TOKEN="hf_xxx_your_token"' >> ~/.bashrc
 ```
 
 #### Verify Values
@@ -112,14 +148,14 @@ Windows PowerShell:
 
 ```powershell
 echo $Env:ONNX_PATH
-echo $Env:HUGGINGFACE_TOKEN
+echo $Env:HUGGINGFACE_HUB_TOKEN
 ```
 
 Linux/macOS:
 
 ```bash
 echo "$ONNX_PATH"
-echo "$HUGGINGFACE_TOKEN"
+echo "$HUGGINGFACE_HUB_TOKEN"
 ```
 
 Security note: never commit real tokens to source control. Rotate any exposed token immediately.
@@ -131,7 +167,6 @@ Security note: never commit real tokens to source control. Rotate any exposed to
 flouds-export export `
   --model-name sentence-transformers/all-MiniLM-L6-v2 `
   --model-for fe `
-  --task feature-extraction `
   --optimize
 ```
 
@@ -140,7 +175,6 @@ flouds-export export `
 flouds-export export `
   --model-name t5-small `
   --model-for s2s `
-  --task seq2seq-lm `
   --optimize
 ```
 
@@ -149,7 +183,6 @@ flouds-export export `
 flouds-export export `
   --model-name cross-encoder/ms-marco-MiniLM-L-12-v2 `
   --model-for ranker `
-  --task sequence-classification `
   --optimize
 ```
 
@@ -158,7 +191,6 @@ flouds-export export `
 flouds-export export `
   --model-name deepseek-ai/deepseek-coder-1.3b-instruct `
   --model-for llm `
-  --task text-generation-with-past `
   --use-external-data-format `
   --use-sub-process `
   --use-fallback-if-failed `
@@ -244,7 +276,6 @@ from model_exporter.export.pipeline import export
 output_dir = export(
     model_name="sentence-transformers/all-MiniLM-L6-v2",
     model_for="fe",
-    task="feature-extraction",
     optimize=True,
     # onnx_path not needed; picked up from ONNX_PATH env var
 )
@@ -257,7 +288,6 @@ Or pass `onnx_path` explicitly to override the environment variable:
 output_dir = export(
     model_name="sentence-transformers/all-MiniLM-L6-v2",
     model_for="fe",
-    task="feature-extraction",
     onnx_path="./custom/onnx",  # overrides ONNX_PATH
     optimize=True,
 )
@@ -270,7 +300,6 @@ print(f"Exported to: {output_dir}")
 export(
     model_name="t5-small",
     model_for="s2s",
-    task="seq2seq-lm",
     optimize=True,
 )
 ```
@@ -281,12 +310,11 @@ export(
 export(
     model_name="meta-llama/Llama-2-7b-hf",
     model_for="llm",
-    task="text-generation-with-past",
     use_external_data_format=True,
     use_subprocess=True,
     use_fallback_if_failed=True,
     merge=True,
-    hf_token="hf_xxx_your_token",  # for gated models
+    huggingface_hub_token="hf_xxx_your_token",  # for gated models
 )
 ```
 
@@ -295,8 +323,8 @@ export(
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `model_name` | `str` | required | HuggingFace model ID or local path |
-| `model_for` | `str` | `"fe"` | `fe`, `s2s`, `sc`, `llm`, `ranker` |
-| `task` | `str` | `None` | e.g. `feature-extraction`, `seq2seq-lm`, `sequence-classification` |
+| `model_for` | `str` | `"fe"` | `fe`, `s2s`, `llm`, `ranker` |
+| `task` | `str` | auto | Defaults from `model_for`: `feature-extraction`, `seq2seq-lm`, `text-generation-with-past`, or `sequence-classification` |
 | `onnx_path` | `str` | `"onnx"` | Output directory |
 | `optimize` | `bool` | `False` | Run ONNX optimizer after export |
 | `optimization_level` | `int` | `99` | ORT optimization level (`0`, `1`, `2`, or `99`) |
@@ -307,13 +335,15 @@ export(
 | `use_external_data_format` | `bool` | `False` | Split model for >2GB exports |
 | `use_subprocess` | `bool` | `None` | Run export in isolated subprocess |
 | `use_fallback_if_failed` | `bool` | `False` | Enable legacy fallback only if primary export fails |
+| `min_free_memory_gb` | `float` | `None` | Free-RAM threshold before export; below it conservative flags are applied |
+| `require_sufficient_memory` | `bool` | `False` | Fail when `min_free_memory_gb` is not satisfied |
 | `merge` | `bool` | `False` | Merge decoder artifacts (LLMs) |
 | `pack_single_file` | `bool` | `False` | Repack external-data into single file |
 | `normalize_embeddings` | `bool` | `False` | L2-normalize before validation |
 | `skip_validator` | `bool` | `False` | Skip numeric validation |
 | `require_validator` | `bool` | `False` | Fail if validation cannot run |
 | `quantize` | any | `False` | Quantization configuration |
-| `hf_token` | `str` | `None` | HuggingFace auth token (via `**kwargs`) |
+| `huggingface_hub_token` | `str` | `None` | Hugging Face auth token |
 
 ## CLI Reference
 
@@ -322,8 +352,8 @@ export(
 | Parameter | Values | Description |
 |-----------|--------|-------------|
 | `--model-name` | `str` | HuggingFace model ID or local path |
-| `--model-for` | `fe`, `s2s`, `sc`, `ranker`, `llm` | Model type: embedding, seq2seq, classification, ranker (cross-encoder), or language model |
-| `--task` | `str` | Export task: `feature-extraction`, `seq2seq-lm`, `sequence-classification`, `text-generation-with-past`, etc. |
+| `--model-for` | `fe`, `s2s`, `ranker`, `llm` | Model type. Also supplies default `--task` and `--library` when omitted |
+| `--task` | `str` | Optional export task override |
 | `--framework` | `pt`, `tf` | Framework: PyTorch or TensorFlow |
 | `--device` | `cpu`, `cuda` | Target device |
 | `--opset-version` | `11`, `14`, `17`, `18` | ONNX opset version (default: 17) |
@@ -334,6 +364,7 @@ export(
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `--framework` | `pt` | Framework: `pt` (PyTorch) or `tf` (TensorFlow) |
+| `--library` | `transformers` | Optional export library override. Defaults from `--model-for` |
 | `--device` | `cpu` | Target device: `cpu` or `cuda` |
 | `--opset-version` | `17` | ONNX opset version (11, 14, or 17) |
 | `--trust-remote-code` | `false` | Allow custom model code execution. Review the model code first. |
@@ -362,10 +393,11 @@ The standalone `optimize` subcommand accepts `--model-dir`, `--model-for`, `--op
 | `--use-sub-process` | Run export in isolated subprocess (safer for large models) |
 | `--use-fallback-if-failed` | Enable legacy fallback exporter only if primary export fails |
 | `--no-post-process` | Skip ONNX post-processing (reduces memory usage) |
-| `--low-memory-env` | Apply low-memory export settings; implies external data format and disabled post-processing |
+| `--min-free-memory-gb` | Minimum free RAM before export; below this threshold conservative low-memory flags are applied |
+| `--require-sufficient-memory` | Fail instead of continuing when `--min-free-memory-gb` is not satisfied |
 | `--pack-single-file` | Repack external-data model into single file during validation |
 
-Do not combine `--low-memory-env` with `--use-external-data-format` or `--no-post-process`; those settings are already implied.
+Use `--use-external-data-format --no-post-process` when you always want conservative large-model settings.
 
 ### Advanced Options
 
@@ -375,7 +407,7 @@ Do not combine `--low-memory-env` with `--use-external-data-format` or `--no-pos
 | `--no-local-prep` | Skip local model preparation for LLMs. Requires `--model-for llm` |
 | `--cleanup` | Remove temporary/extraneous files post-export |
 | `--prune-canonical` | Remove canonical models when merged version exists. Requires `--cleanup` |
-| `--hf-token` | HuggingFace API token for private models |
+| `--huggingface_hub_token` | Hugging Face API token for private models |
 | `--onnx-path` | Custom output directory (default: `./onnx`) |
 
 ## Output Structure
@@ -434,6 +466,7 @@ For large models, use subprocess isolation to prevent parent process crashes:
 ```powershell
 flouds-export export `
   --model-name meta-llama/Llama-2-7b-hf `
+  --model-for llm `
   --use-sub-process `
   --use-fallback-if-failed `
   --use-external-data-format
@@ -446,6 +479,21 @@ The batch subcommand monitors available RAM before each export:
 ```powershell
 # Require at least 4GB free RAM before each export
 flouds-export batch --preset recommended --min-free-memory-gb 4
+```
+
+### Single Export Memory Threshold
+
+For one-off exports, `--min-free-memory-gb` checks RAM after pre-export cleanup.
+If available RAM is below the threshold, the exporter automatically enables
+external data format and disables ONNX post-processing. Add
+`--require-sufficient-memory` to fail fast instead.
+
+```powershell
+flouds-export export `
+  --model-name meta-llama/Llama-2-7b-hf `
+  --model-for llm `
+  --min-free-memory-gb 8 `
+  --require-sufficient-memory
 ```
 
 ### Config-Driven Batch Workflow
@@ -470,6 +518,7 @@ For models >2GB:
 ```powershell
 flouds-export export `
   --model-name gpt2-large `
+  --model-for llm `
   --use-external-data-format `
   --use-sub-process `
   --use-fallback-if-failed `
@@ -492,7 +541,7 @@ flouds-export export `
 
 ### Export Logs
 
-By default, export logs go to the terminal only. When `--log-to-file` or `log_to_file=True` is set, per-model timestamped logs are written to `logs/onnx_exports/` under the current working directory. Set `FLOUDS_LOG_DIR` to write file logs somewhere else.
+By default, export logs go to the terminal only. When `--log-to-file` or `log_to_file=True` is set, per-model timestamped logs are written to `logs/onnx_exports/` under the current working directory. Set `LOG_DIR` to write file logs somewhere else, and `LOG_LEVEL=DEBUG` for more verbose logs.
 
 ## Requirements
 

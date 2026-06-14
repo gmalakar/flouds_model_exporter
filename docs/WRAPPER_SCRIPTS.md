@@ -113,7 +113,7 @@ Expected format:
 Example line:
 
 ```text
-flouds-export export --model-name BAAI/bge-base-en-v1.5 --model-for fe --task feature-extraction --library transformers --normalize-embeddings
+flouds-export export --model-name BAAI/bge-base-en-v1.5 --model-for fe --normalize-embeddings
 ```
 
 ## Config Files

@@ -259,8 +259,9 @@ def _export_config_to_argv(config):
         "optimization_level": "--optimization-level",
         "opset_version": "--opset-version",
         "device": "--device",
+        "min_free_memory_gb": "--min-free-memory-gb",
         "quantize": "--quantize",
-        "hf_token": "--hf-token",
+        "huggingface_hub_token": "--huggingface_hub_token",
         "library": "--library",
     }
     flag_options = {
@@ -279,7 +280,7 @@ def _export_config_to_argv(config):
         "no_post_process": "--no-post-process",
         "portable": "--portable",
         "use_subprocess": "--use-sub-process",
-        "low_memory_env": "--low-memory-env",
+        "require_sufficient_memory": "--require-sufficient-memory",
         "log_to_file": "--log-to-file",
     }
 
