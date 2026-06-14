@@ -42,7 +42,7 @@ Issues = "https://github.com/gmalakar/flouds_model_exporter/issues"
 
 [project.optional-dependencies]
 dev = [
-	"pre-commit==4.5.1",
+	"pre-commit==4.6.0",
 	"pytest>=7.0.0",
 	"black==24.1.1",
 	"isort==5.13.2",
