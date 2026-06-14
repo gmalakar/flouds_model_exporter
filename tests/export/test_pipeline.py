@@ -7,6 +7,7 @@
 
 import importlib
 import logging
+import os
 import sys
 import types
 from pathlib import Path
@@ -210,6 +211,46 @@ def test_auto_resolve_trust_remote_code_does_not_auto_enable(monkeypatch):
     assert "trust_remote_code" in warnings[0]
     assert "not explicitly allowed" in warnings[0]
 
+
+def test_setup_huggingface_hub_token_sets_only_canonical_env_var(monkeypatch):
+    from model_exporter.export import pipeline_helpers
+
+    fake_hub = types.ModuleType("huggingface_hub")
+    fake_hub.login = lambda *args, **kwargs: None
+    monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hub)
+    monkeypatch.delenv("HUGGINGFACE_HUB_TOKEN", raising=False)
+
+    logger = SimpleNamespace(info=lambda *args, **kwargs: None, debug=lambda *args, **kwargs: None)
+
+    token, flags = pipeline_helpers._setup_huggingface_hub_token("hf_test", logger)
+
+    assert token == "hf_test"
+    assert flags == {"set_hub": True, "login_ok": True}
+    assert os.environ["HUGGINGFACE_HUB_TOKEN"] == "hf_test"
+
+
+def test_setup_huggingface_hub_token_reads_env_without_writing_it(monkeypatch):
+    from model_exporter.export import pipeline_helpers
+
+    fake_hub = types.ModuleType("huggingface_hub")
+
+    def _fail_login(*args, **kwargs):
+        raise RuntimeError("offline")
+
+    fake_hub.login = _fail_login
+    monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hub)
+    monkeypatch.setenv("HUGGINGFACE_HUB_TOKEN", "hf_env")
+
+    logger = SimpleNamespace(
+        warning=lambda *args, **kwargs: None,
+        debug=lambda *args, **kwargs: None,
+    )
+
+    token, flags = pipeline_helpers._setup_huggingface_hub_token(None, logger)
+    pipeline_helpers._teardown_huggingface_hub_token(flags, logger)
+
+    assert token == "hf_env"
+    assert os.environ["HUGGINGFACE_HUB_TOKEN"] == "hf_env"
 
 def test_legacy_fallback_does_not_force_trust_remote_code(monkeypatch, tmp_path):
     from model_exporter.export import legacy_fallback

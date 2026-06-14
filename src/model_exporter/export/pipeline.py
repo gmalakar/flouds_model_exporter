@@ -28,7 +28,7 @@ except Exception:
 
 from model_exporter.config.logging import setup_export_logging, teardown_export_logging
 from model_exporter.export.helpers import configure_protobuf
-from model_exporter.export.options import ExportConfig
+from model_exporter.export.options import ExportConfig, resolve_model_for_defaults
 from model_exporter.export.path_utils import safe_remove_export_dir
 from model_exporter.export.pipeline_helpers import (
     _auto_resolve_trust_remote_code,
@@ -40,9 +40,9 @@ from model_exporter.export.pipeline_helpers import (
     _resolve_use_cache,
     _run_numeric_validator,
     _run_quantization_step,
-    _setup_hf_token,
+    _setup_huggingface_hub_token,
     _should_skip_validator,
-    _teardown_hf_token,
+    _teardown_huggingface_hub_token,
     _with_export_lock,
 )
 from model_exporter.export.pipeline_v2 import _run_export_with_fallback, _run_post_optimization_validator
@@ -117,31 +117,32 @@ def export(
     cleanup: bool = False,
     prune_canonical: bool = False,
     no_post_process: bool = False,
-    low_memory_env: bool = False,
+    min_free_memory_gb: float | None = None,
+    require_sufficient_memory: bool = False,
     log_to_file: bool = False,
+    huggingface_hub_token: str | None = None,
     **kwargs: Any,
 ) -> str:
-    """Export a HuggingFace model to ONNX and optionally optimize it.
+    """Export a Hugging Face model to ONNX and optionally optimize it.
 
-    Orchestrates the full export pipeline: protobuf configuration, HuggingFace
+    Orchestrates the full export pipeline: protobuf configuration, Hugging Face
     authentication, ONNX export via ``optimum``, structural verification, numeric
     validation, and post-export optimization.
 
     Args:
-        model_name: HuggingFace model ID (e.g. ``"sentence-transformers/all-MiniLM-L6-v2"``)
+        model_name: Hugging Face model ID (e.g. ``"sentence-transformers/all-MiniLM-L6-v2"``)
             or a local directory path containing the model files.
         model_for: Model purpose. One of:
 
-            - ``"fe"`` – feature extraction / sentence embeddings (default)
-            - ``"s2s"`` – seq2seq (T5, BART, mT5, …)
-            - ``"sc"`` – sequence classification
-            - ``"ranker"`` – cross-encoder / ranking
-            - ``"llm"`` – causal language model (GPT-2, LLaMA, …)
+            - ``"fe"`` - feature extraction / sentence embeddings (default)
+            - ``"s2s"`` - seq2seq (T5, BART, mT5, etc.)
+            - ``"ranker"`` - cross-encoder / ranking
+            - ``"llm"`` - causal language model (GPT-2, LLaMA, etc.)
 
         optimize: Run ONNX Runtime graph optimizations after export.
         merge: Merge decoder-with-past artifacts into a single file (LLMs only).
         optimization_level: ORT optimization level when ``optimize=True``.
-            Range 0–99; 99 enables all optimizations (default).
+            Range 0-99; 99 enables all optimizations (default).
         portable: Use conservative optimizations that are safe across platforms
             and ORT versions. Implies a lower optimization level.
         model_folder: Override the output sub-folder name. Defaults to the last
@@ -165,7 +166,7 @@ def export(
         require_validator: Raise an error if the numeric validator cannot run
             (e.g. because optional dependencies are missing).
         trust_remote_code: Allow execution of custom model code hosted in the
-            model repository. Use with caution — only enable for repos you trust.
+            model repository. Use with caution; only enable for repos you trust.
         normalize_embeddings: L2-normalize sentence embeddings before comparing
             reference and ONNX outputs during validation.
         skip_validator: Skip numeric validation entirely.
@@ -189,15 +190,19 @@ def export(
             when merged artifacts exist.
         no_post_process: Skip ONNX post-processing (deduplication). Reduces peak
             memory usage during large-model export.
-        low_memory_env: Treat the environment as low-memory and apply conservative
-            export flags (use external_data, disable some post-processing).
+        min_free_memory_gb: Optional minimum free RAM threshold checked before
+            export. When free RAM is below this value, conservative export flags
+            are enabled automatically unless ``require_sufficient_memory`` is
+            ``True``.
+        require_sufficient_memory: Raise an error instead of continuing with
+            conservative flags when ``min_free_memory_gb`` is not satisfied.
         log_to_file: Write per-export log to a rotating file under
             ``logs/onnx_exports/`` (opt-in; default ``False``).
+        huggingface_hub_token: Hugging Face API token for accessing private or
+            gated model repositories. If omitted, ``HUGGINGFACE_HUB_TOKEN`` is
+            read from the environment.
         **kwargs: Additional keyword arguments forwarded to the underlying
-            exporter. Recognised extras:
-
-            - ``hf_token`` / ``huggingface_hub_token`` – HuggingFace API token
-              for accessing private or gated model repositories.
+            exporter.
 
     Returns:
         Absolute path to the directory containing the exported ONNX model file(s).
@@ -209,8 +214,8 @@ def export(
     Environment variables:
         ONNX_PATH: Default root directory for ONNX output when ``onnx_path`` is
             not passed explicitly.
-        HUGGINGFACE_TOKEN: HuggingFace API token used when ``hf_token`` is not
-            supplied via kwargs.
+        HUGGINGFACE_HUB_TOKEN: Hugging Face API token used when
+            ``huggingface_hub_token`` is not supplied.
 
     Example::
 
@@ -228,22 +233,18 @@ def export(
     configure_protobuf()
 
     # Normalize Hugging Face token handling
-    try:
-        token: Optional[str] = kwargs.pop("hf_token", None) or kwargs.pop("huggingface_hub_token", None)
-    except Exception:
-        token = None
-
-    token, hf_flags = _setup_hf_token(token, kwargs, logger)
-    hf_flags = hf_flags or {}
+    token, hub_token_flags = _setup_huggingface_hub_token(huggingface_hub_token, logger)
+    hub_token_flags = hub_token_flags or {}
 
     opset_version = opset_version or get_default_opset()
 
     if not model_name or not str(model_name).strip():
         raise ValueError("model_name cannot be empty")
 
-    _model_for = (model_for or "").lower()
-    if _model_for not in ["fe", "s2s", "sc", "llm", "ranker"]:
-        raise ValueError(f"Invalid model_for: {model_for}")
+    try:
+        _model_for, task, library = resolve_model_for_defaults(model_for, task, library)
+    except ValueError as exc:
+        raise ValueError(str(exc)) from exc
 
     # Resolve paths once, before any cleanup/deletion can occur.
     _cwd = os.getcwd()
@@ -255,14 +256,6 @@ def export(
         cwd=_cwd,
     )
     _output_parent = str(Path(_output_dir).parent)
-
-    if low_memory_env:
-        if not use_external_data_format:
-            logger.info("Enabling external_data format for low-memory export")
-        if not no_post_process:
-            logger.info("Disabling ONNX post-processing for low-memory export")
-        use_external_data_format = True
-        no_post_process = True
 
     # BASE_DIR is still used for the logging helper (log path inside package src)
     BASE_DIR: str = os.path.dirname(os.path.abspath(__file__))
@@ -304,13 +297,26 @@ def export(
         # runs for the same output directory are correctly serialized.
         with _with_export_lock(_output_dir, model_name, logger):
             # Pre-export memory cleanup
-            _cleanup_memory_caches(logger)
+            _available_gb, memory_threshold_met = _cleanup_memory_caches(
+                logger,
+                min_free_memory_gb=min_free_memory_gb,
+                require_sufficient_memory=require_sufficient_memory,
+            )
+
+            if not memory_threshold_met:
+                reason = "available RAM is below threshold"
+                if not use_external_data_format:
+                    logger.info("Enabling external_data format for low-memory export (%s)", reason)
+                if not no_post_process:
+                    logger.info("Disabling ONNX post-processing for low-memory export (%s)", reason)
+                use_external_data_format = True
+                no_post_process = True
 
             # Skip export if outputs exist and no force requested
             all_exist: bool = all(os.path.exists(os.path.join(_output_dir, fname)) for fname in expected)
             if all_exist and not force:
                 logger.info(
-                    "All expected ONNX files already exist in %s — skipping export (use --force to re-export)",
+                    "All expected ONNX files already exist in %s - skipping export (use --force to re-export)",
                     _output_dir,
                 )
                 return _output_dir
@@ -363,13 +369,6 @@ def export(
                         "Local model prep skipped or failed; continuing with original source",
                         exc_info=True,
                     )
-
-                # Pass no_post_process and low_memory_env through kwargs for pipeline_v2
-                _extra_kwargs: dict[str, Any] = {}
-                if no_post_process:
-                    _extra_kwargs["no_post_process"] = True
-                if low_memory_env:
-                    _extra_kwargs["low_memory_env"] = True
 
                 export_succeeded, used_trust_remote = _run_export_with_fallback(
                     export_source,
@@ -560,14 +559,15 @@ def export(
                             logger.exception("Optimization failed: %s", e)
 
             # Artifact cleanup
-            try:
-                from model_exporter.export.helpers import cleanup_extraneous_onnx_files as _cleanup_extraneous_onnx_files
+            if cleanup:
+                try:
+                    from model_exporter.export.helpers import cleanup_extraneous_onnx_files as _cleanup_extraneous_onnx_files
 
-                _cleanup_extraneous_onnx_files(_output_dir, logger, cleanup, prune_canonical)
-            except ImportError:
-                logger.debug("cleanup_extraneous_onnx_files helper not available")
-            except Exception:
-                logger.debug("cleanup_extraneous_onnx_files failed", exc_info=True)
+                    _cleanup_extraneous_onnx_files(_output_dir, logger, cleanup, prune_canonical)
+                except ImportError:
+                    logger.debug("cleanup_extraneous_onnx_files helper not available")
+                except Exception:
+                    logger.debug("cleanup_extraneous_onnx_files failed", exc_info=True)
 
             # Post-export quantization
             _run_quantization_step(_output_dir, quantize, kwargs, logger)
@@ -598,7 +598,7 @@ def export(
             except Exception:
                 pass
         try:
-            _teardown_hf_token(hf_flags, logger)
+            _teardown_huggingface_hub_token(hub_token_flags, logger)
         except Exception:
             pass
 

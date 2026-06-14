@@ -163,7 +163,7 @@ main_export(**kwargs)
             if runner and ("proc" in locals()) and proc.returncode != 0:
                 logs_root = None
                 try:
-                    logs_root = os.environ.get("FLOUDS_LOG_DIR")
+                    logs_root = os.environ.get("LOG_DIR")
                 except Exception:
                     logs_root = None
 

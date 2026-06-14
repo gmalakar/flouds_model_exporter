@@ -20,8 +20,7 @@ except ImportError:
 def get_logger(name: str) -> logging.Logger:
     """Return a named :class:`logging.Logger` pre-configured with a stream handler.
 
-    The log level is set to ``DEBUG`` when the ``FLOUDS_API_ENV`` environment
-    variable equals ``development``; otherwise it defaults to ``INFO``.
+    The log level defaults to ``INFO`` and can be overridden with ``LOG_LEVEL``.
     Calling this function multiple times with the same *name* is safe — the
     handler is only attached once.
 
@@ -32,9 +31,8 @@ def get_logger(name: str) -> logging.Logger:
         A configured :class:`logging.Logger` instance.
     """
     logger = logging.getLogger(name)
-    # Respect Development environment to enable debug logging
-    env = os.getenv("FLOUDS_API_ENV", "").strip()
-    level = logging.DEBUG if env.lower() == "development" else logging.INFO
+    level_name = os.getenv("LOG_LEVEL", "INFO").strip().upper()
+    level = getattr(logging, level_name, logging.INFO)
 
     if not logger.handlers:
         handler = logging.StreamHandler()
@@ -58,21 +56,12 @@ def get_logger(name: str) -> logging.Logger:
 
 
 def get_preferred_provider(default: str = "CPUExecutionProvider") -> str:
-    """Get preferred ONNX Runtime provider from environment or default."""
-    prov = os.getenv("FLOUDS_ORT_PROVIDER")
-    if prov:
-        return prov
+    """Get the default ONNX Runtime provider."""
     return default
 
 
 def get_default_opset(default: int = 17) -> int:
-    """Get default ONNX opset version from environment or default."""
-    try:
-        val = os.getenv("FLOUDS_ONNX_OPSET")
-        if val:
-            return int(val)
-    except (ValueError, TypeError):
-        pass
+    """Get the default ONNX opset version."""
     return default
 
 

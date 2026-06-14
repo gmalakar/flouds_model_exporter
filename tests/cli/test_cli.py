@@ -86,6 +86,83 @@ def test_export_subcommand_forwards_to_export_pipeline(cli_module, monkeypatch, 
     assert captured["onnx_path"] == str(onnx_dir)
 
 
+def test_export_subcommand_defaults_task_and_library_from_model_for(cli_module):
+    module, captured = cli_module
+
+    module.main(
+        [
+            "export",
+            "--model-name",
+            "microsoft/phi-2",
+            "--model-for",
+            "llm",
+        ]
+    )
+
+    assert captured["model_for"] == "llm"
+    assert captured["task"] == "text-generation-with-past"
+    assert captured["library"] == "transformers"
+
+
+def test_export_subcommand_keeps_user_task_and_library(cli_module):
+    module, captured = cli_module
+
+    module.main(
+        [
+            "export",
+            "--model-name",
+            "t5-small",
+            "--model-for",
+            "s2s",
+            "--task",
+            "text2text-generation-with-past",
+            "--library",
+            "custom-library",
+        ]
+    )
+
+    assert captured["task"] == "text2text-generation-with-past"
+    assert captured["library"] == "custom-library"
+
+
+def test_export_subcommand_forwards_huggingface_hub_token(cli_module):
+    module, captured = cli_module
+
+    module.main(
+        [
+            "export",
+            "--model-name",
+            "sentence-transformers/all-MiniLM-L6-v2",
+            "--task",
+            "feature-extraction",
+            "--huggingface_hub_token",
+            "hf_test",
+        ]
+    )
+
+    assert captured["huggingface_hub_token"] == "hf_test"
+
+
+def test_export_subcommand_forwards_memory_threshold(cli_module):
+    module, captured = cli_module
+
+    module.main(
+        [
+            "export",
+            "--model-name",
+            "sentence-transformers/all-MiniLM-L6-v2",
+            "--task",
+            "feature-extraction",
+            "--min-free-memory-gb",
+            "4.5",
+            "--require-sufficient-memory",
+        ]
+    )
+
+    assert captured["min_free_memory_gb"] == 4.5
+    assert captured["require_sufficient_memory"] is True
+
+
 def test_export_subcommand_forwards_quantize(cli_module):
     module, captured = cli_module
 
@@ -191,8 +268,7 @@ def test_batch_subcommand_loads_custom_config(cli_module, tmp_path):
                   {
                     "model_name": "sentence-transformers/all-MiniLM-L6-v2",
                     "model_for": "fe",
-                    "task": "feature-extraction",
-                    "library": "transformers",
+                    "huggingface_hub_token": "hf_test",
                     "optimize": true,
                     "optimization_level": 2,
                     "quantize": "fp16"
@@ -219,6 +295,9 @@ def test_batch_subcommand_loads_custom_config(cli_module, tmp_path):
 
     assert len(captured["calls"]) == 1
     assert captured["calls"][0]["model_name"] == "sentence-transformers/all-MiniLM-L6-v2"
+    assert captured["calls"][0]["task"] == "feature-extraction"
+    assert captured["calls"][0]["library"] == "transformers"
+    assert captured["calls"][0]["huggingface_hub_token"] == "hf_test"
     assert captured["calls"][0]["optimize"] is True
     assert captured["calls"][0]["optimization_level"] == 2
     assert captured["calls"][0]["quantize"] == "fp16"
@@ -347,6 +426,23 @@ def test_optimize_subcommand_forwards_to_optimizer(cli_module):
     }
 
 
+def test_optimize_subcommand_rejects_removed_sc_model_for(cli_module):
+    module, captured = cli_module
+
+    with pytest.raises(SystemExit):
+        module.main(
+            [
+                "optimize",
+                "--model-dir",
+                "onnx/models/ranker/test-model",
+                "--model-for",
+                "sc",
+            ]
+        )
+
+    assert captured.get("optimize_call") is None
+
+
 @pytest.mark.parametrize(
     "invalid_flag",
     [
@@ -356,6 +452,7 @@ def test_optimize_subcommand_forwards_to_optimizer(cli_module):
         "--prune_canonical",
         "--use_sub_process",
         "--pack-single-threshold-mb",
+        "--low-memory-env",
     ],
 )
 def test_invalid_export_flags_are_rejected(cli_module, invalid_flag):
@@ -376,6 +473,24 @@ def test_invalid_export_flags_are_rejected(cli_module, invalid_flag):
     assert captured["calls"] == []
 
 
+def test_unknown_model_for_is_rejected_with_clear_error(cli_module, capsys):
+    module, captured = cli_module
+
+    with pytest.raises(SystemExit):
+        module.main(
+            [
+                "export",
+                "--model-name",
+                "test-model",
+                "--model-for",
+                "sc",
+            ]
+        )
+
+    assert captured["calls"] == []
+    assert "Unknown --model-for value" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize(
     "extra_args",
     [
@@ -384,8 +499,7 @@ def test_invalid_export_flags_are_rejected(cli_module, invalid_flag):
         ["--prune-canonical"],
         ["--skip-validator", "--require-validator"],
         ["--skip-validator", "--normalize-embeddings"],
-        ["--low-memory-env", "--use-external-data-format"],
-        ["--low-memory-env", "--no-post-process"],
+        ["--require-sufficient-memory"],
         ["--no-local-prep"],
         ["--merge"],
     ],

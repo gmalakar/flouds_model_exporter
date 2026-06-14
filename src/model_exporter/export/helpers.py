@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # =============================================================================
-# File: export_helpers.py
+# File: helpers.py
 # Date: 2026-01-09
 # Copyright (c) 2026 Goutam Malakar.
 # SPDX-License-Identifier: Apache-2.0
@@ -364,10 +364,6 @@ def cleanup_extraneous_onnx_files(
     try:
         files = [f for f in os.listdir(output_dir_arg) if f.lower().endswith(".onnx")]
         safe_log(logger_arg, "info", "Found ONNX files for cleanup: %s", sorted(files))
-
-        def _matches_any(sub: str, lst: list[str]) -> bool:
-            sub = sub.lower()
-            return any(sub in f.lower() for f in lst)
 
         # If cleanup is not requested, skip cleanup entirely.
         if not cleanup_flag:

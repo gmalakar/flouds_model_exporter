@@ -57,7 +57,7 @@ src/model_exporter/
 
 2. Export
    - Primary path uses `optimum.exporters.onnx.main_export`.
-   - Export settings are derived from `--model-for`, `--task`, opset, device, and portability flags.
+   - Export settings are derived from `--model-for`, optional task/library overrides, opset, device, and portability flags.
    - The pipeline can retry with safer fallback settings if the first export strategy fails.
 
 3. Verification and validation
@@ -78,13 +78,13 @@ src/model_exporter/
 | --- | --- | --- |
 | Embeddings / feature extraction | `fe` | `feature-extraction` |
 | Seq2seq encoder-decoder | `s2s` | `seq2seq-lm` |
-| Sequence classification | `sc` | `sequence-classification` |
 | Cross-encoder / ranking | `ranker` | `sequence-classification` |
 | Decoder-only LLM | `llm` | `text-generation-with-past` |
 
 Notes:
 
 - `--merge` only applies to decoder-only LLM exports.
+- Standard tasks and libraries are filled in from `--model-for`; pass `--task` or `--library` only when overriding those defaults.
 - Seq2seq models produce `encoder_model.onnx` and `decoder_model.onnx`, and may also produce `decoder_with_past_model.onnx` when the task requests KV-cache export.
 - Large models often require `--use-external-data-format` and may benefit from `--use-sub-process` plus `--no-post-process`.
 
@@ -93,17 +93,17 @@ Notes:
 ### Feature extraction
 
 ```powershell
-flouds-export export --model-name sentence-transformers/all-MiniLM-L6-v2 --model-for fe --task feature-extraction --optimize
+flouds-export export --model-name sentence-transformers/all-MiniLM-L6-v2 --model-for fe --optimize
 ```
 
 ```powershell
-flouds-export export --model-name BAAI/bge-small-en-v1.5 --model-for fe --task feature-extraction --optimize --normalize-embeddings
+flouds-export export --model-name BAAI/bge-small-en-v1.5 --model-for fe --optimize --normalize-embeddings
 ```
 
 ### Ranking
 
 ```powershell
-flouds-export export --model-name cross-encoder/ms-marco-MiniLM-L-12-v2 --model-for ranker --task sequence-classification --optimize
+flouds-export export --model-name cross-encoder/ms-marco-MiniLM-L-12-v2 --model-for ranker --optimize
 ```
 
 ### Seq2seq
@@ -111,19 +111,19 @@ flouds-export export --model-name cross-encoder/ms-marco-MiniLM-L-12-v2 --model-
 Recommended CPU-friendly encoder-decoder export:
 
 ```powershell
-flouds-export export --model-name t5-small --model-for s2s --task seq2seq-lm --optimize --library transformers
+flouds-export export --model-name t5-small --model-for s2s --optimize
 ```
 
 KV-cache variant when interactive decoding is needed:
 
 ```powershell
-flouds-export export --model-name t5-small --model-for s2s --task text2text-generation-with-past --optimize --pack-single-file --library transformers
+flouds-export export --model-name t5-small --model-for s2s --task text2text-generation-with-past --optimize --pack-single-file
 ```
 
 ### Decoder-only LLM
 
 ```powershell
-flouds-export export --model-name microsoft/phi-2 --model-for llm --task text-generation-with-past --optimize --library transformers --trust-remote-code --skip-validator --merge
+flouds-export export --model-name microsoft/phi-2 --model-for llm --optimize --trust-remote-code --skip-validator --merge
 ```
 
 ### Batch runs
@@ -146,7 +146,6 @@ The batch runner reads presets from `src/model_exporter/config/policy.yaml`.
 onnx/models/
 +-- fe/
 +-- s2s/
-+-- sc/
 +-- ranker/
 +-- llm/
 ```
@@ -162,7 +161,7 @@ Typical outputs:
 Use these flags first when the model is large or export memory is tight:
 
 ```powershell
-flouds-export export --model-name gpt2-large --model-for llm --task text-generation-with-past --use-external-data-format --use-sub-process --no-post-process --opset-version 11
+flouds-export export --model-name gpt2-large --model-for llm --use-external-data-format --use-sub-process --no-post-process --opset-version 11
 ```
 
 Recommended adjustments:
@@ -194,7 +193,7 @@ Example debug run:
 
 ```powershell
 $env:TRANSFORMERS_VERBOSITY = "debug"
-flouds-export export --model-name microsoft/Phi-3.5-mini-instruct --model-for llm --task text-generation-with-past --library transformers --merge
+flouds-export export --model-name microsoft/Phi-3.5-mini-instruct --model-for llm --merge
 ```
 
 ## Troubleshooting
@@ -208,7 +207,7 @@ flouds-export export --model-name microsoft/Phi-3.5-mini-instruct --model-for ll
 | Validation mismatch | Re-run without optimization first, then compare with `--normalize-embeddings` when applicable. |
 | Remote-code requirement | Add `--trust-remote-code` only after reviewing the model repository. |
 
-Logs go to the terminal by default. When `--log-to-file` is enabled, file logs are written under `logs/onnx_exports/` in the current working directory unless overridden by `FLOUDS_LOG_DIR`.
+Logs go to the terminal by default. When `--log-to-file` is enabled, file logs are written under `logs/onnx_exports/` in the current working directory unless overridden by `LOG_DIR`. Use `LOG_LEVEL=DEBUG` for more verbose logs.
 
 ## Related Docs
 

@@ -72,7 +72,7 @@ def _auto_enable_use_cache(model_name: str, model_for: str, task: str | None) ->
 
     Priority:
     1. Caller flag
-    2. model_for classification (fe, s2s, llm, sc, ranker)
+    2. model_for classification (fe, s2s, llm, ranker)
     3. Task name (e.g., text-generation-with-past)
     4. HF config inspection
     5. Fallback
@@ -81,11 +81,11 @@ def _auto_enable_use_cache(model_name: str, model_for: str, task: str | None) ->
     # 2. model_for classification
     mf = model_for.lower()
 
-    if mf in {"sc", "ranker"}:
+    if mf in {"ranker"}:
         logger.info(
             "Model %s is used for %s; disabling use_cache",
             model_name,
-            "ranking (cross-encoder)" if mf == "ranker" else "sequence classification",
+            "ranking (cross-encoder)",
         )
         return False
 
@@ -339,8 +339,18 @@ def _remove_validation_marker(output_dir: str) -> bool:
     return False
 
 
-def _cleanup_memory_caches(logger: Any) -> None:
-    """Perform pre-export memory cleanup: GC, CUDA cache, check memory."""
+def _cleanup_memory_caches(
+    logger: Any,
+    min_free_memory_gb: float | None = None,
+    require_sufficient_memory: bool = False,
+) -> tuple[float | None, bool]:
+    """Perform pre-export memory cleanup and optional RAM threshold check.
+
+    Returns ``(available_gb, threshold_met)``. If psutil is unavailable,
+    ``available_gb`` is ``None`` and the threshold is treated as met.
+    """
+    available_gb: float | None = None
+    threshold_met = True
     try:
         gc.collect()
         try:
@@ -355,22 +365,29 @@ def _cleanup_memory_caches(logger: Any) -> None:
         try:
             import psutil
 
-            available_mb = psutil.virtual_memory().available / (1024 * 1024)
-            logger.info("Available memory before export: %.1f MB", available_mb)
+            available_gb = psutil.virtual_memory().available / (1024**3)
+            logger.info("Available memory before export: %.2f GB", available_gb)
+            if min_free_memory_gb is not None and available_gb < float(min_free_memory_gb):
+                threshold_met = False
+                message = "Available memory %.2f GB is below threshold %.2f GB"
+                if require_sufficient_memory:
+                    logger.error(message, available_gb, min_free_memory_gb)
+                    raise RuntimeError(message % (available_gb, min_free_memory_gb))
+                logger.warning(message, available_gb, min_free_memory_gb)
         except Exception:
+            if require_sufficient_memory:
+                raise
             logger.debug("psutil not available for memory check before export")
     except Exception:
+        if require_sufficient_memory:
+            raise
         logger.debug("Pre-export memory cleanup failed", exc_info=True)
+    return available_gb, threshold_met
 
 
 def _is_seq2seq(model_for: str) -> bool:
     """Check if model type is seq2seq."""
     return (model_for or "").lower() in ["s2s", "seq2seq-lm"]
-
-
-def _is_ranker(model_for: str) -> bool:
-    """Check if model type is ranker (cross-encoder)."""
-    return (model_for or "").lower() in ["ranker", "ce", "cross-encoder"]
 
 
 def _should_skip_validator(model_for: str, pack_single_file: bool, expected: List[str]) -> bool:
@@ -382,30 +399,27 @@ def _should_skip_validator(model_for: str, pack_single_file: bool, expected: Lis
     return False
 
 
-def _setup_hf_token(token: str | None, kwargs: dict, logger: Any) -> tuple[str | None, dict]:
-    """Setup Hugging Face token: extract from kwargs/env, set env vars, login.
+def _setup_huggingface_hub_token(token: str | None, logger: Any) -> tuple[str | None, dict]:
+    """Setup Hugging Face token: extract from argument/env, set hub token, login.
 
-    Returns (token, flags_dict) where flags_dict tracks which env vars were set.
+    ``HUGGINGFACE_HUB_TOKEN`` is the canonical token environment variable for
+    this exporter.
+
+    Returns (token, flags_dict) where flags_dict tracks whether the env var was set.
     """
-    flags = {"set_hf": False, "set_hub": False, "login_ok": False}
+    flags = {"set_hub": False, "login_ok": False}
 
     if not token:
-        token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN")
+        token = os.environ.get("HUGGINGFACE_HUB_TOKEN")
 
     if token:
         try:
-            prev_hf = os.environ.get("HF_TOKEN")
-            prev_hub = os.environ.get("HUGGINGFACE_HUB_TOKEN")
-            if prev_hf is None:
-                os.environ["HF_TOKEN"] = token
-                flags["set_hf"] = True
-            if prev_hub is None:
+            if os.environ.get("HUGGINGFACE_HUB_TOKEN") is None:
                 os.environ["HUGGINGFACE_HUB_TOKEN"] = token
                 flags["set_hub"] = True
         except Exception:
-            logger.debug("Could not set HF token environment variables")
+            logger.debug("Could not set HUGGINGFACE_HUB_TOKEN environment variable")
 
-        # Try to login
         try:
             from huggingface_hub import login as _hf_login
 
@@ -426,17 +440,15 @@ def _setup_hf_token(token: str | None, kwargs: dict, logger: Any) -> tuple[str |
     return token, flags
 
 
-def _teardown_hf_token(flags: dict, logger: Any) -> None:
-    """Cleanup HF token env vars if login failed."""
+def _teardown_huggingface_hub_token(flags: dict, logger: Any) -> None:
+    """Cleanup HUGGINGFACE_HUB_TOKEN if this process set it and login failed."""
     try:
         if not flags.get("login_ok", False):
-            for env_var in ["HF_TOKEN", "HUGGINGFACE_HUB_TOKEN"]:
-                if (env_var == "HF_TOKEN" and flags.get("set_hf")) or (env_var == "HUGGINGFACE_HUB_TOKEN" and flags.get("set_hub")):
-                    try:
-                        if env_var in os.environ:
-                            del os.environ[env_var]
-                    except Exception:
-                        pass
+            if flags.get("set_hub"):
+                try:
+                    os.environ.pop("HUGGINGFACE_HUB_TOKEN", None)
+                except Exception:
+                    pass
     except Exception:
         logger.debug("HF token teardown failed", exc_info=True)
 

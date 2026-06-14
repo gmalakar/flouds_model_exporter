@@ -15,7 +15,7 @@ def test_setup_export_logging_uses_configured_log_dir(monkeypatch, tmp_path):
     logger = logging.getLogger("test-configured-log-dir")
     logger.handlers.clear()
     log_dir = tmp_path / "custom-logs"
-    monkeypatch.setenv("FLOUDS_LOG_DIR", str(log_dir))
+    monkeypatch.setenv("LOG_DIR", str(log_dir))
 
     file_handler, logfile_fd, old_stdout, old_stderr, logfile_path = setup_export_logging(str(tmp_path), "model", "rev", logger, log_to_file=True)
 
@@ -29,7 +29,7 @@ def test_setup_export_logging_uses_configured_log_dir(monkeypatch, tmp_path):
 def test_setup_export_logging_defaults_to_cwd_logs(monkeypatch, tmp_path):
     logger = logging.getLogger("test-default-log-dir")
     logger.handlers.clear()
-    monkeypatch.delenv("FLOUDS_LOG_DIR", raising=False)
+    monkeypatch.delenv("LOG_DIR", raising=False)
     monkeypatch.chdir(tmp_path)
 
     file_handler, logfile_fd, old_stdout, old_stderr, logfile_path = setup_export_logging(str(tmp_path), "model", "rev", logger, log_to_file=True)

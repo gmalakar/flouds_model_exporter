@@ -29,7 +29,7 @@ def _add_optimize_arguments(parser):
     parser.add_argument(
         "--model-for",
         required=True,
-        choices=["fe", "s2s", "sc", "llm", "ranker"],
+        choices=["fe", "s2s", "llm", "ranker"],
         help="Model purpose used to decide which artifacts are eligible for optimization",
     )
     parser.add_argument(
