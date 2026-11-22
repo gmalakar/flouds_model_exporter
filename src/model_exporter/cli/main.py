@@ -9,7 +9,7 @@
 # HINTS:
 # - `--model-for` supplies default task/library values: fe -> feature-extraction,
 #   s2s -> seq2seq-lm, ranker -> sequence-classification,
-#   llm -> text-generation-with-past.
+#   llm/vlm/multimodal -> text-generation-with-past, vision/clip -> feature-extraction.
 # - Supply `--task` only when you need an explicit task override, such as
 #   text2text-generation-with-past for seq2seq KV-cache behavior.
 # - After exporting a seq2seq model, you should see encoder_model.onnx, decoder_model.onnx, and decoder_with_past_model.onnx in the output directory.

@@ -13,15 +13,15 @@ There is no separate PyPI publish workflow. GitHub Release creation and PyPI pub
 
 ## Standard Release Flow
 
-1. Ensure `main` is green (CI checks passing).
-2. Update `CHANGELOG.md` under `Unreleased`.
+1. Ensure CI is green on the branch being released, including the `integration` job (a real export) and the `security` job.
+2. Move the `Unreleased` entries in `CHANGELOG.md` under a heading for the new version and date.
 3. Bump `project.version` in `pyproject.toml`.
 4. Commit the version/changelog update.
 5. Create and push an annotated tag:
 
 ```bash
-git tag -a v0.1.1 -m "Release v0.1.1"
-git push origin v0.1.1
+git tag -a v2.0.0 -m "Release v2.0.0"
+git push origin v2.0.0
 ```
 
 6. Workflow builds `sdist` + `wheel`, validates metadata via `twine check`, uploads artifacts, creates a GitHub Release, and publishes the package to PyPI.
@@ -33,7 +33,7 @@ For tag-triggered releases, workflow validation enforces that tag `vX.Y.Z` exact
 If a release job needs to be re-run for an existing tag:
 
 1. Open Actions -> Release -> Run workflow.
-2. Set `tag` to the existing tag (for example `v0.1.1`).
+2. Set `tag` to the existing tag (for example `v2.0.0`).
 3. Set `publish_to_pypi=true` only if the version has not already been published to PyPI.
 
 Manual release runs also validate that the supplied tag matches `project.version` in `pyproject.toml`.

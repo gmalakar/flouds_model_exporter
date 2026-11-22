@@ -17,6 +17,10 @@ MODEL_FOR_DEFAULTS: dict[str, dict[str, str]] = {
     "s2s": {"task": "seq2seq-lm", "library": "transformers"},
     "llm": {"task": "text-generation-with-past", "library": "transformers"},
     "ranker": {"task": "sequence-classification", "library": "transformers"},
+    "vision": {"task": "feature-extraction", "library": "transformers"},
+    "clip": {"task": "feature-extraction", "library": "transformers"},
+    "vlm": {"task": "text-generation-with-past", "library": "transformers"},
+    "multimodal": {"task": "text-generation-with-past", "library": "transformers"},
 }
 
 
@@ -57,6 +61,7 @@ class ExportConfig:
     skip_validator: bool = False
     device: str = "cpu"
     huggingface_hub_token: str | None = None
+    revision: str | None = None
     library: str | None = None
     merge: bool = False
     cleanup: bool = False
@@ -98,6 +103,7 @@ class ExportConfig:
             skip_validator=args.skip_validator,
             device=args.device,
             huggingface_hub_token=args.huggingface_hub_token,
+            revision=getattr(args, "revision", None),
             library=library,
             merge=args.merge,
             cleanup=args.cleanup,

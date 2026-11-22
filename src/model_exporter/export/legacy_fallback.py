@@ -8,12 +8,11 @@
 
 from __future__ import annotations
 
-import os
 import shutil
-import subprocess
 import tempfile
 from typing import Any, Optional
 
+from model_exporter.export.source_ref import copy_or_clone
 from model_exporter.export.subprocess_runner import _run_main_export_subprocess
 from model_exporter.utils.helpers import get_default_opset, safe_log
 
@@ -33,26 +32,12 @@ def _prepare_clone_source(export_source: str, logger: Any) -> tuple[Optional[str
     """Prepare a temporary local source by copy/clone. Returns (path, error)."""
     tmp_dir = tempfile.mkdtemp(prefix="onnx_v1_clone_")
     try:
-        if os.path.isdir(export_source):
-            try:
-                shutil.copytree(export_source, tmp_dir, dirs_exist_ok=True)
-            except TypeError:
-                shutil.copytree(export_source, tmp_dir)
-            return tmp_dir, None
-
-        repo_to_clone = export_source
-        if "/" in export_source and not export_source.startswith("http://") and not export_source.startswith("https://"):
-            repo_to_clone = f"https://huggingface.co/{export_source}"
-
-        subprocess.check_call(["git", "clone", "--depth", "1", repo_to_clone, tmp_dir])
+        copy_or_clone(export_source, tmp_dir)
         return tmp_dir, None
     except Exception as exc:
         safe_log(logger, "warning", "Legacy clone/source prep failed: %s", exc)
-        try:
-            shutil.rmtree(tmp_dir)
-        except Exception:
-            pass
-        return None, str(exc)
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        return None, str(exc) or type(exc).__name__
 
 
 def run_legacy_v1_fallback(
@@ -70,6 +55,7 @@ def run_legacy_v1_fallback(
     no_post_process: bool = False,
     merge: bool = False,
     use_subprocess: bool = False,
+    token: str | None = None,
 ) -> tuple[bool, bool]:
     """Run legacy-style ONNX export fallback.
 
@@ -93,6 +79,8 @@ def run_legacy_v1_fallback(
         base_kwargs["library"] = library
     if trust_remote_code:
         base_kwargs["trust_remote_code"] = True
+    if token:
+        base_kwargs["token"] = token
 
     attempts: list[tuple[str, dict[str, Any], bool]] = [
         ("legacy_base", dict(base_kwargs), False),

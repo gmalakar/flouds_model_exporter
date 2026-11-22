@@ -12,6 +12,7 @@ from __future__ import annotations
 import inspect
 import os
 
+from model_exporter.errors import ExporterError, ExportInProgressError, ExportValidationError, RemoteCodeNotAllowedError
 from model_exporter.export.options import MODEL_FOR_DEFAULTS, ExportConfig
 from model_exporter.export.pipeline import export as export_unified
 
@@ -46,7 +47,9 @@ def _add_export_arguments(parser):
         default="fe",
         help=(
             "Model purpose: 'fe' (feature-extraction), 's2s' (seq2seq-lm),"
-            " 'ranker' (cross-encoder/ranking), or 'llm' (causal-lm). "
+            " 'ranker' (cross-encoder/ranking), 'llm' (causal-lm),"
+            " 'vision' (vision encoder), 'clip' (CLIP),"
+            " 'vlm' (vision-language model), or 'multimodal'. "
             "Defaults task/library based on this value. (default: fe)"
         ),
     )
@@ -138,6 +141,15 @@ def _add_export_arguments(parser):
         "--no-local-prep",
         action="store_true",
         help="Skip creating a prepared local copy (temp_local) for LLMs before export",
+    )
+    parser.add_argument(
+        "--revision",
+        dest="revision",
+        default=None,
+        help=(
+            "Branch, tag or commit of the model repository to export. "
+            "Use a commit hash for a reproducible export; the default is the repository's main branch."
+        ),
     )
     parser.add_argument(
         "--huggingface_hub_token",
@@ -297,7 +309,22 @@ def _execute_export_kwargs(unified_kwargs, parser):
     elif quantize == "both":
         unified_kwargs["quantize"] = True
 
-    export_unified(**unified_kwargs)
+    try:
+        export_unified(**unified_kwargs)
+    except ExportInProgressError as exc:
+        # Another run owns this output directory. For the command line that is not a
+        # failure: say so and finish, as earlier versions did.
+        print(f"[INFO] {exc} Nothing to do.")
+    except ExportValidationError as exc:
+        print(f"[ERROR] {exc}")
+        raise SystemExit(exc.returncode or 1) from exc
+    except RemoteCodeNotAllowedError as exc:
+        print(f"[ERROR] {exc}")
+        raise SystemExit(2) from exc
+    except ExporterError as exc:
+        # An invalid model name, a failed export: report the reason without a traceback.
+        print(f"[ERROR] {exc}")
+        raise SystemExit(1) from exc
 
 
 def _run_export(args, parser):

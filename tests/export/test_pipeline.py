@@ -84,6 +84,19 @@ def test_should_skip_validator_for_multi_file_seq2seq(monkeypatch):
     assert should_skip is True
 
 
+def test_auto_enable_use_cache_for_multimodal_generators(monkeypatch):
+    import_pipeline_module(monkeypatch)
+    from model_exporter.export import pipeline_helpers
+
+    enabled = pipeline_helpers._auto_enable_use_cache(
+        model_name="llava-hf/llava-1.5-7b-hf",
+        model_for="vlm",
+        task="text-generation-with-past",
+    )
+
+    assert enabled is True
+
+
 def test_optimize_if_encoder_skips_decoder_only_models():
     from model_exporter.export.optimizer import optimize_if_encoder
 
@@ -212,45 +225,49 @@ def test_auto_resolve_trust_remote_code_does_not_auto_enable(monkeypatch):
     assert "not explicitly allowed" in warnings[0]
 
 
-def test_setup_huggingface_hub_token_sets_only_canonical_env_var(monkeypatch):
+def _hub_that_must_not_be_logged_into(monkeypatch):
+    fake_hub = types.ModuleType("huggingface_hub")
+
+    def _no_login(*args, **kwargs):
+        raise AssertionError("the exporter must not log in: a login saves the token on disk")
+
+    fake_hub.login = _no_login
+    monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hub)
+
+
+def test_hub_token_is_returned_without_login_or_environment_change(monkeypatch):
     from model_exporter.export import pipeline_helpers
 
-    fake_hub = types.ModuleType("huggingface_hub")
-    fake_hub.login = lambda *args, **kwargs: None
-    monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hub)
+    _hub_that_must_not_be_logged_into(monkeypatch)
     monkeypatch.delenv("HUGGINGFACE_HUB_TOKEN", raising=False)
-
+    monkeypatch.delenv("HF_TOKEN", raising=False)
     logger = SimpleNamespace(info=lambda *args, **kwargs: None, debug=lambda *args, **kwargs: None)
 
     token, flags = pipeline_helpers._setup_huggingface_hub_token("hf_test", logger)
-
-    assert token == "hf_test"
-    assert flags == {"set_hub": True, "login_ok": True}
-    assert os.environ["HUGGINGFACE_HUB_TOKEN"] == "hf_test"
-
-
-def test_setup_huggingface_hub_token_reads_env_without_writing_it(monkeypatch):
-    from model_exporter.export import pipeline_helpers
-
-    fake_hub = types.ModuleType("huggingface_hub")
-
-    def _fail_login(*args, **kwargs):
-        raise RuntimeError("offline")
-
-    fake_hub.login = _fail_login
-    monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hub)
-    monkeypatch.setenv("HUGGINGFACE_HUB_TOKEN", "hf_env")
-
-    logger = SimpleNamespace(
-        warning=lambda *args, **kwargs: None,
-        debug=lambda *args, **kwargs: None,
-    )
-
-    token, flags = pipeline_helpers._setup_huggingface_hub_token(None, logger)
     pipeline_helpers._teardown_huggingface_hub_token(flags, logger)
 
+    assert token == "hf_test"
+    assert flags == {"set_hub": False, "login_ok": False}
+    assert "HUGGINGFACE_HUB_TOKEN" not in os.environ
+    assert "HF_TOKEN" not in os.environ
+
+
+def test_hub_token_falls_back_to_the_environment(monkeypatch):
+    from model_exporter.export import pipeline_helpers
+
+    _hub_that_must_not_be_logged_into(monkeypatch)
+    logger = SimpleNamespace(warning=lambda *args, **kwargs: None, debug=lambda *args, **kwargs: None)
+
+    monkeypatch.setenv("HUGGINGFACE_HUB_TOKEN", "hf_env")
+    monkeypatch.setenv("HF_TOKEN", "hf_other")
+    token, flags = pipeline_helpers._setup_huggingface_hub_token(None, logger)
+    pipeline_helpers._teardown_huggingface_hub_token(flags, logger)
     assert token == "hf_env"
     assert os.environ["HUGGINGFACE_HUB_TOKEN"] == "hf_env"
+
+    monkeypatch.delenv("HUGGINGFACE_HUB_TOKEN")
+    assert pipeline_helpers._setup_huggingface_hub_token(None, logger)[0] == "hf_other"
+    assert pipeline_helpers._setup_huggingface_hub_token("hf_given", logger)[0] == "hf_given"
 
 
 def test_legacy_fallback_does_not_force_trust_remote_code(monkeypatch, tmp_path):

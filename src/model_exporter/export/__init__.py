@@ -14,8 +14,10 @@ runtime stack.
 
 from __future__ import annotations
 
+import sys
 from importlib import import_module
 from types import ModuleType
+from typing import Any
 
 __all__ = [
     "pipeline",
@@ -33,3 +35,22 @@ def __getattr__(name: str) -> ModuleType:
     if name in __all__:
         return import_module(f"{__name__}.{name}")
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+class _CallableExportPackage(ModuleType):
+    """Lets ``from model_exporter import export`` be called.
+
+    The public function and this sub-package share the name ``export``. Once the
+    sub-package is imported, ``model_exporter.export`` is the package, so the documented
+    ``from model_exporter import export; export(...)`` used to fail with "module object
+    is not callable". Calling the package now runs the export function, and
+    ``model_exporter.export.pipeline`` and the other submodules keep working.
+    """
+
+    def __call__(self, *args: Any, **kwargs: Any) -> str:
+        from model_exporter.export.pipeline import export as _export
+
+        return _export(*args, **kwargs)
+
+
+sys.modules[__name__].__class__ = _CallableExportPackage

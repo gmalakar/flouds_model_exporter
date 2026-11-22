@@ -27,6 +27,10 @@ Thanks for your interest in contributing to flouds_model_exporter.
   - `pre-commit run --all-files`
 - Run tests:
   - `pytest -q`
+- Run a real export (needs network access; downloads a tiny model):
+  - `pytest -m integration tests/integration`
+  - Run this whenever you change the export pipeline or a dependency range. The unit tests
+    replace the exporter with fakes and cannot show that an export works.
 - Check runtime dependency mirrors:
   - `python tools/check_dependency_sync.py`
 

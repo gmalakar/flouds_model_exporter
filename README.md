@@ -46,6 +46,12 @@ pip install -e .
 pip install -e ".[dev]"
 ```
 
+PyTorch is installed with the export stack. To choose a specific build (CPU-only, or a CUDA version), install it first and pip will keep it. For CPU only:
+
+```bash
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+```
+
 After installation the CLI entry point is available:
 
 ```powershell
@@ -161,6 +167,23 @@ echo "$HUGGINGFACE_HUB_TOKEN"
 Security note: never commit real tokens to source control. Rotate any exposed token immediately.
 
 ### Export a Model
+
+The exporter now recognizes a broader model catalog so Flouds.Net can keep a
+single registry and common model path for embedding, ranking, vision, CLIP,
+VLM, and multimodal workloads.
+
+| `--model-for` | Typical use | Default task |
+|---|---|---|
+| `fe` | Embedding / feature extraction | `feature-extraction` |
+| `ranker` | Cross-encoder rerankers | `sequence-classification` |
+| `s2s` | Seq2seq encoders/decoders | `seq2seq-lm` |
+| `llm` | Causal LLMs | `text-generation-with-past` |
+| `vision` | Vision encoders | `feature-extraction` |
+| `clip` | CLIP-style dual encoders | `feature-extraction` |
+| `vlm` | Vision-language generators | `text-generation-with-past` |
+| `multimodal` | Generic multimodal generators | `text-generation-with-past` |
+
+All exports are written beneath `ONNX_PATH/models/<model_for>/<model_folder>/`.
 
 **Embedding model (Feature Extraction):**
 ```powershell
@@ -323,9 +346,9 @@ export(
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `model_name` | `str` | required | HuggingFace model ID or local path |
-| `model_for` | `str` | `"fe"` | `fe`, `s2s`, `llm`, `ranker` |
+| `model_for` | `str` | `"fe"` | `fe`, `s2s`, `llm`, `ranker`, `vision`, `clip`, `vlm`, `multimodal` |
 | `task` | `str` | auto | Defaults from `model_for`: `feature-extraction`, `seq2seq-lm`, `text-generation-with-past`, or `sequence-classification` |
-| `onnx_path` | `str` | `"onnx"` | Output directory |
+| `onnx_path` | `str` | `"onnx"` | Output root; the model is written to `<onnx_path>/models/<model_for>/<folder>/`. Falls back to the `ONNX_PATH` environment variable |
 | `optimize` | `bool` | `False` | Run ONNX optimizer after export |
 | `optimization_level` | `int` | `99` | ORT optimization level (`0`, `1`, `2`, or `99`) |
 | `opset_version` | `int` | auto | ONNX opset version |
@@ -334,16 +357,46 @@ export(
 | `trust_remote_code` | `bool` | `False` | Allow custom model code |
 | `use_external_data_format` | `bool` | `False` | Split model for >2GB exports |
 | `use_subprocess` | `bool` | `None` | Run export in isolated subprocess |
-| `use_fallback_if_failed` | `bool` | `False` | Enable legacy fallback only if primary export fails |
+| `use_fallback_if_failed` | `bool` | `False` | Allow the legacy exporter and precision-lowering (float16) retries if the primary export fails |
 | `min_free_memory_gb` | `float` | `None` | Free-RAM threshold before export; below it conservative flags are applied |
 | `require_sufficient_memory` | `bool` | `False` | Fail when `min_free_memory_gb` is not satisfied |
 | `merge` | `bool` | `False` | Merge decoder artifacts (LLMs) |
 | `pack_single_file` | `bool` | `False` | Repack external-data into single file |
 | `normalize_embeddings` | `bool` | `False` | L2-normalize before validation |
 | `skip_validator` | `bool` | `False` | Skip numeric validation |
-| `require_validator` | `bool` | `False` | Fail if validation cannot run |
+| `require_validator` | `bool` | `False` | Raise `ExportValidationError` if validation fails |
 | `quantize` | any | `False` | Quantization configuration |
-| `huggingface_hub_token` | `str` | `None` | Hugging Face auth token |
+| `huggingface_hub_token` | `str` | `None` | Hugging Face auth token, used for this export only |
+| `revision` | `str` | `None` | Branch, tag or commit of the model repository; use a commit hash for a reproducible export |
+
+`from model_exporter import export_model` is the same function under a name that cannot be confused with the `model_exporter.export` sub-package.
+
+### Errors
+
+`export()` raises exceptions from `model_exporter.errors`; it never ends the calling process.
+
+| Exception | Raised when |
+|---|---|
+| `InvalidModelReferenceError` | The model name or revision is empty, starts with `-`, or contains control characters. Also a `ValueError` |
+| `RemoteCodeNotAllowedError` | The model needs `trust_remote_code` and it was not passed |
+| `ExportInProgressError` | Another process is exporting to the same output directory |
+| `ExportFailedError` | Every export attempt failed; `detail` holds the last error. Also a `RuntimeError` |
+| `ExportValidationError` | Validation failed and `require_validator` was set; `returncode` holds the validator's code |
+
+All of them derive from `ExporterError`.
+
+### Security notes
+
+- **Remote code.** `trust_remote_code=True` runs Python from the model repository on your machine. The exporter never enables it by itself; review the repository first.
+- **Tokens.** A token passed to `export()` is used for that call only. It is not written to disk and no login is performed. Prefer the `HUGGINGFACE_HUB_TOKEN` (or `HF_TOKEN`) environment variable over `--huggingface_hub_token`, which is visible in the process list.
+- **Fallbacks.** If an export only succeeds through a fallback, `export_fallback.json` in the output directory records which one and what it changed. A fallback that lowers precision to float16 runs only with `use_fallback_if_failed=True`.
+
+### Upgrading from 1.x
+
+- Catch `ExportInProgressError` and `ExportValidationError` where you caught `SystemExit`.
+- Pass `trust_remote_code=True` explicitly for models that need it; they used to load anyway.
+- Pass the token on every call, or set it in the environment; an earlier call no longer leaves it behind.
+- Set `use_fallback_if_failed=True` if you relied on the automatic float16 retry.
 
 ## CLI Reference
 
@@ -408,6 +461,7 @@ Use `--use-external-data-format --no-post-process` when you always want conserva
 | `--cleanup` | Remove temporary/extraneous files post-export |
 | `--prune-canonical` | Remove canonical models when merged version exists. Requires `--cleanup` |
 | `--huggingface_hub_token` | Hugging Face API token for private models |
+| `--revision` | Branch, tag or commit of the model repository to export |
 | `--onnx-path` | Custom output directory (default: `./onnx`) |
 
 ## Output Structure
@@ -442,6 +496,7 @@ onnx/models/
 
 ```
 src/model_exporter/
++-- errors.py                       # Exceptions raised by the exporter
 +-- cli/                            # CLI entrypoints and subcommands
 +-- config/                         # Logging and batch policy
 +-- export/                         # Export pipeline, helpers, optimizer, subprocess runner
@@ -538,6 +593,8 @@ flouds-export export `
 | `TracerWarning: Converting tensor` | Model tracing limitation (usually safe to ignore) |
 | Validation failures | Check numeric precision; try `--skip-validator` for known issues |
 | `trust_remote_code required` | Add `--trust-remote-code` flag (review model code first) |
+| `An export to ... is already running` | Another process holds the output directory's lock; wait for it, or remove a stale `.export.lock` |
+| `All export attempts failed for model ...: <reason>` | The text after the colon is the last error; the full output is in the log |
 
 ### Export Logs
 
@@ -547,11 +604,13 @@ By default, export logs go to the terminal only. When `--log-to-file` or `log_to
 
 - **Python**: 3.11 or 3.12
 - **System**: 8GB+ RAM (16GB+ for large models)
-- **Dependencies**: See `requirements-prod.txt` (runtime) and `requirements-dev.txt` (development)
+- **Dependencies**: See `requirements-prod.txt` (runtime) and `requirements-dev.txt` (development). NumPy 1.26 and 2.x, and onnx 1.16.1 up to (not including) 2.0, are supported.
+- **PyTorch**: installed as a dependency of the export stack; install a specific build first if you need one.
 
 ## Contributing
 
 See `CONTRIBUTING.md` for contribution workflow and local development checks.
+`docs/PRODUCTION_READINESS_AUDIT.md` lists what was reviewed for 2.0.0 and what is still open.
 For expected behavior and standards, see `CODE_OF_CONDUCT.md` and `SECURITY.md`.
 Maintainer release steps are documented in `docs/RELEASE_PROCESS.md`.
 

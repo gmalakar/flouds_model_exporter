@@ -6,6 +6,42 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-11-21
+
+Breaking changes are marked **Breaking**. See "Upgrading from 1.x" in the README.
+
+### Security
+
+- **Breaking:** `trust_remote_code` is never switched on by the exporter. When a model needed it, the fallback loader and the local snapshot retry used to load again with `trust_remote_code=True` even though the caller had passed `False`, running code from the model repository without consent. They now raise `RemoteCodeNotAllowedError`. The fallback exporter's default for a missing flag also changed from `True` to `False`.
+- **Breaking:** a Hugging Face token passed to `export()` is no longer saved. The exporter used to call `huggingface_hub.login`, which writes the token to disk as the machine's default credential, and left `HUGGINGFACE_HUB_TOKEN` set in the process, so one caller's token was used for every later export. The token is now passed to the hub calls as an argument for that export only. In subprocess mode it goes to the child through its environment, not the argument file.
+- The model reference is checked before use, and `git clone` receives a validated URL after `--`. A reference starting with `-`, containing control characters, or using a scheme other than `https` for cloning is refused with `InvalidModelReferenceError`.
+- Tokens are redacted from one more debug log line that printed the exporter arguments in full.
+
+### Fixed
+
+- **Breaking:** library code no longer ends the caller's process. A second export of the same model used to raise `SystemExit(0)`, reporting success while nothing was exported, and a failed required validation raised `SystemExit(code)`. They now raise `ExportInProgressError` and `ExportValidationError`. The `flouds-export` command keeps its exit codes.
+- `from model_exporter import export` returned the `export` sub-package instead of the function once the sub-package was imported, so the documented usage failed with "module object is not callable". It is callable again, and `export_model` is available as an unambiguous name for the same function.
+- A failed export now says why: `ExportFailedError` carries the last error reported (`detail`), instead of only "All export attempts failed".
+- Subprocess arguments keep their types. String values such as `"123"`, `"none"`, `"true"` and `"1.0"` were converted to numbers, `None` and booleans in the child process, which broke models and folders with such names.
+- Temporary directories of other exports are left alone. Cleanup used to remove every matching directory in the system temp folder, or those older than five minutes, which could delete the working directory of an export still running in another process. Only directories older than six hours are removed now.
+- The validator no longer passes a missing reference embedding to the diagnostics writer.
+
+### Changed
+
+- **Breaking:** a fallback that changes numeric precision (float16) only runs when `use_fallback_if_failed` is set. Whichever fallback produces the artifact is recorded in `export_fallback.json` next to the model and logged as a warning.
+- Dependency ranges widened: `onnx>=1.16.1,<2` (was `==1.16.1`), `numpy>=1.26.4,<3` (was `<1.27`), `psutil>=5.9.8,<8` (was `==5.9.8`). Verified by real exports on NumPy 1.26.4 with onnx 1.16.1 and on NumPy 2.5.5 with onnx 1.23.2.
+- The token is passed to `transformers` and `optimum` as `token`, replacing the deprecated `use_auth_token`.
+
+### Added
+
+- `revision` option (`--revision`) to export a specific branch, tag or commit.
+- `model_exporter.errors` with `ExporterError` and its subclasses.
+- Model types `vision`, `clip`, `vlm` and `multimodal`.
+- Integration tests that download a tiny model, export it in-process and through the subprocess path, and run the result (`pytest -m integration tests/integration`).
+- CI: a real-export job on Python 3.11 and 3.12, a security job (bandit, pip-audit), and runs on `release/**` branches.
+
+## [1.0.1] and earlier
+
 ### Added
 
 - Open-source governance baseline files:

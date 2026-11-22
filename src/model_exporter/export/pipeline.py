@@ -27,6 +27,7 @@ except Exception:
     pass
 
 from model_exporter.config.logging import setup_export_logging, teardown_export_logging
+from model_exporter.errors import ExporterError, ExportFailedError
 from model_exporter.export.helpers import configure_protobuf
 from model_exporter.export.options import ExportConfig, resolve_model_for_defaults
 from model_exporter.export.path_utils import safe_remove_export_dir
@@ -45,7 +46,8 @@ from model_exporter.export.pipeline_helpers import (
     _teardown_huggingface_hub_token,
     _with_export_lock,
 )
-from model_exporter.export.pipeline_v2 import _run_export_with_fallback, _run_post_optimization_validator
+from model_exporter.export.pipeline_v2 import _run_export_with_fallback, _run_post_optimization_validator, last_export_failure, reset_export_failure
+from model_exporter.export.source_ref import validate_model_reference
 from model_exporter.utils.helpers import get_default_opset, get_logger
 from model_exporter.validation.checker import verify_models
 
@@ -121,6 +123,7 @@ def export(
     require_sufficient_memory: bool = False,
     log_to_file: bool = False,
     huggingface_hub_token: str | None = None,
+    revision: str | None = None,
     **kwargs: Any,
 ) -> str:
     """Export a Hugging Face model to ONNX and optionally optimize it.
@@ -198,6 +201,8 @@ def export(
             conservative flags when ``min_free_memory_gb`` is not satisfied.
         log_to_file: Write per-export log to a rotating file under
             ``logs/onnx_exports/`` (opt-in; default ``False``).
+        revision: Branch, tag or commit of the model repository to export. A commit
+            hash gives a reproducible export. Defaults to the repository's main branch.
         huggingface_hub_token: Hugging Face API token for accessing private or
             gated model repositories. If omitted, ``HUGGINGFACE_HUB_TOKEN`` is
             read from the environment.
@@ -238,8 +243,11 @@ def export(
 
     opset_version = opset_version or get_default_opset()
 
-    if not model_name or not str(model_name).strip():
-        raise ValueError("model_name cannot be empty")
+    model_name = validate_model_reference(model_name)
+    if revision is not None:
+        # Same rules as the model name: it is passed to the hub client and git.
+        revision = validate_model_reference(revision)
+    reset_export_failure()
 
     try:
         _model_for, task, library = resolve_model_for_defaults(model_for, task, library)
@@ -278,7 +286,7 @@ def export(
 
         if "/" in str(model_name):
             try:
-                info = HfApi().repo_info(str(model_name))
+                info = HfApi(token=token).repo_info(str(model_name), revision=revision)
                 rev_tag = getattr(info, "sha", None) or getattr(info, "revision", None) or "local"
             except Exception:
                 rev_tag = "local"
@@ -306,9 +314,15 @@ def export(
             if not memory_threshold_met:
                 reason = "available RAM is below threshold"
                 if not use_external_data_format:
-                    logger.info("Enabling external_data format for low-memory export (%s)", reason)
+                    logger.info(
+                        "Enabling external_data format for low-memory export (%s)",
+                        reason,
+                    )
                 if not no_post_process:
-                    logger.info("Disabling ONNX post-processing for low-memory export (%s)", reason)
+                    logger.info(
+                        "Disabling ONNX post-processing for low-memory export (%s)",
+                        reason,
+                    )
                 use_external_data_format = True
                 no_post_process = True
 
@@ -386,14 +400,17 @@ def export(
                     merge=bool(merge),
                     use_subprocess=bool(use_subprocess),
                     use_fallback_if_failed=bool(use_fallback_if_failed),
+                    auth_token=token,
+                    revision=revision,
                 )
                 if not export_succeeded:
-                    error_msg = f"All export attempts failed for model {model_name}"
-                    logger.error(
-                        "%s. Check logs above for detailed error information.",
-                        error_msg,
-                    )
-                    raise RuntimeError(error_msg)
+                    detail, cause = last_export_failure()
+                    if isinstance(cause, ExporterError):
+                        # For example the model needs trust_remote_code: say exactly that.
+                        raise cause
+                    failure = ExportFailedError(str(model_name), detail)
+                    logger.error("%s. Check logs above for detailed error information.", failure)
+                    raise failure from cause
             except Exception as e:
                 try:
                     logger.warning(
@@ -553,8 +570,8 @@ def export(
                                         "Post-optimization validation failed",
                                         exc_info=True,
                                     )
-                        except (SystemExit, Exception) as e:
-                            if isinstance(e, SystemExit):
+                        except Exception as e:
+                            if isinstance(e, ExporterError):
                                 raise
                             logger.exception("Optimization failed: %s", e)
 
@@ -587,8 +604,9 @@ def export(
         # Best-effort temp artifact cleanup
         try:
             from model_exporter.export.helpers import cleanup_temporary_export_artifacts
+            from model_exporter.export.path_utils import STALE_TEMP_SECONDS
 
-            cleanup_temporary_export_artifacts(logger=logger)
+            cleanup_temporary_export_artifacts(logger=logger, max_age_seconds=STALE_TEMP_SECONDS)
         except Exception:
             logger.debug("cleanup_temporary_export_artifacts raised", exc_info=True)
         # Tear down per-run file logging

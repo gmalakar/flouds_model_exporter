@@ -14,6 +14,7 @@ Describe what changed and why.
 
 - [ ] I ran `pre-commit run --all-files`
 - [ ] I ran `pytest -q`
+- [ ] I ran `pytest -m integration tests/integration` if the export pipeline or a dependency range changed
 - [ ] I ran `python tools/check_dependency_sync.py` if dependencies changed
 - [ ] I updated docs for user-visible behavior changes
 

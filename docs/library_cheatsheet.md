@@ -11,7 +11,7 @@ These are the direct runtime dependencies declared in `pyproject.toml` and mirro
 - `onnxruntime`: runtime validation, session creation, and quantization helpers.
 - `optimum`: primary ONNX export orchestration.
 - `optimum-onnx`: Optimum ONNX integration for export and runtime workflows.
-- `numpy`: array comparison, diagnostics, and validation math.
+- `numpy`: array comparison, diagnostics, and validation math. NumPy 1.26 and 2.x are both supported.
 - `huggingface_hub`: model download, metadata lookup, and authentication.
 - `psutil`: RAM inspection and memory-aware export decisions.
 - `protobuf`: ONNX and transformer serialization dependencies.
@@ -21,7 +21,7 @@ These are the direct runtime dependencies declared in `pyproject.toml` and mirro
 
 These packages may be pulled in by the Hugging Face stack or required by specific model families, but they are not declared as direct project dependencies here.
 
-- `torch`: reference model execution and PyTorch-based export paths.
+- `torch`: reference model execution and PyTorch-based export paths. Installed with the export stack. To pick a build, install it first (for CPU only: `pip install torch --index-url https://download.pytorch.org/whl/cpu`).
 - `sentence-transformers`: some embedding-model export scenarios.
 - `sentencepiece`: tokenizer backend required by some Hugging Face models.
 - `safetensors`: safe tensor weight loading.

@@ -19,11 +19,13 @@ test-time module resolution.
 
 from typing import Any
 
-__all__ = ["ExportConfig", "export", "export_from_config", "validate_onnx"]
+__all__ = ["ExportConfig", "export", "export_from_config", "export_model", "validate_onnx"]
 
 
 def __getattr__(name: str) -> Any:
-    if name == "export":
+    if name in ("export", "export_model"):
+        # ``export_model`` is the same function under a name that cannot be confused
+        # with the ``model_exporter.export`` sub-package.
         from .export.pipeline import export as _export
 
         return _export

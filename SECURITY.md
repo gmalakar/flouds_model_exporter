@@ -4,6 +4,11 @@
 
 This project is in active development. Security fixes are applied to the latest `main` branch and the latest published release when a release exists.
 
+| Release | Status |
+| --- | --- |
+| 2.x | Supported |
+| 1.x | Not supported; upgrade to 2.x (see the changelog's Security section) |
+
 | Runtime | Status |
 | --- | --- |
 | Python 3.11 | Supported |
@@ -35,7 +40,10 @@ When reporting, include:
 ## Security Notes
 
 - Do not publish Hugging Face tokens, ONNX artifacts containing private model data, or validation dumps from private models.
-- `--trust-remote-code` executes model repository code. Enable it only after reviewing the model repository and source.
+- `--trust-remote-code` executes model repository code. Enable it only after reviewing the model repository and source. The exporter never enables it by itself: a model that needs it fails with `RemoteCodeNotAllowedError` until you pass the flag.
+- A token given to `export()` or `--huggingface_hub_token` is used for that export only. It is not written to disk, no login is performed, and it is not left in the environment. Prefer the `HUGGINGFACE_HUB_TOKEN` or `HF_TOKEN` environment variable on shared machines, because command-line arguments are visible in the process list.
+- Model names and revisions are validated before use; values that a command line would read as options are refused.
+- Use `--revision <commit>` to export a fixed commit of a model repository.
 - If a token is exposed, revoke it immediately and create a replacement token.
 
 ## Disclosure

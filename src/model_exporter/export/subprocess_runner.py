@@ -1,5 +1,5 @@
 # =============================================================================
-# File: export_subprocess.py
+# File: subprocess_runner.py
 # Date: 2026-01-09
 # Copyright (c) 2026 Goutam Malakar.
 # SPDX-License-Identifier: Apache-2.0
@@ -31,7 +31,11 @@ def _run_main_export_subprocess(me_kwargs: dict, logger: Any) -> tuple[bool, str
     runner_fh = None
     try:
         tmpf = _tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json")
-        json.dump(me_kwargs, tmpf)
+        # The token is handed to the child through its environment, not the argument
+        # file, so it is never written to disk.
+        child_kwargs = dict(me_kwargs)
+        child_token = child_kwargs.pop("token", None)
+        json.dump(child_kwargs, tmpf)
         tmpf.close()
 
         runner_fh = _tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".py", encoding="utf-8")
@@ -39,6 +43,9 @@ def _run_main_export_subprocess(me_kwargs: dict, logger: Any) -> tuple[bool, str
 from optimum.exporters.onnx import main_export
 
 def _norm(d):
+    # Rename the few keys whose names differ between exporter versions. Values arrive
+    # as JSON, which already carries their types, so they are left exactly as given:
+    # a model called "123" or a folder called "none" stays a string.
     if isinstance(d, dict):
         if 'torch_dtype' in d:
             d['dtype'] = d.pop('torch_dtype')
@@ -48,64 +55,11 @@ def _norm(d):
             d['opset'] = d.pop('opset_version')
         if 'onnx_path' in d and 'output' not in d:
             d['output'] = d.pop('onnx_path')
-        for k, v in list(d.items()):
-            if isinstance(v, str):
-                lv = v.lower()
-                if lv == 'true':
-                    d[k] = True
-                    continue
-                if lv == 'false':
-                    d[k] = False
-                    continue
-                if lv == 'none':
-                    d[k] = None
-                    continue
-                try:
-                    if '.' in v:
-                        d[k] = float(v)
-                    else:
-                        d[k] = int(v)
-                except Exception:
-                    pass
-            _norm(d[k])
-    elif isinstance(d, list):
-        for i, item in enumerate(d):
-            if isinstance(item, str):
-                li = item.lower()
-                if li == 'true':
-                    d[i] = True
-                    continue
-                if li == 'false':
-                    d[i] = False
-                    continue
-                if li == 'none':
-                    d[i] = None
-                    continue
-                try:
-                    if '.' in item:
-                        d[i] = float(item)
-                    else:
-                        d[i] = int(item)
-                except Exception:
-                    pass
-            _norm(d[i])
 
 kwargs = json.load(open(sys.argv[1], 'r', encoding='utf-8'))
 _norm(kwargs)
 import json as _json
 import sys as _sys
-# Debug logging commented out due to string literal issue
-# try:
-#     _sys.stderr.write("RUNNER_KWARGS:" + _json.dumps(kwargs)[:2000] + "\\n")
-#     try:
-#         _sys.stderr.flush()
-#     except Exception:
-#         pass
-# except Exception:
-#     try:
-#         print('RUNNER_KWARGS:' + _json.dumps(kwargs)[:2000])
-#     except Exception:
-#         pass
 main_export(**kwargs)
 """
         runner_fh.write(runner_code)
@@ -113,6 +67,8 @@ main_export(**kwargs)
         runner = runner_fh.name
 
         env = os.environ.copy()
+        if isinstance(child_token, str) and child_token:
+            env["HF_TOKEN"] = child_token
         env["OMP_NUM_THREADS"] = env.get("OMP_NUM_THREADS", "1")
         env["MKL_NUM_THREADS"] = env.get("MKL_NUM_THREADS", "1")
         env["OPENBLAS_NUM_THREADS"] = env.get("OPENBLAS_NUM_THREADS", "1")

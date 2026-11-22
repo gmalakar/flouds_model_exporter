@@ -104,6 +104,42 @@ def test_export_subcommand_defaults_task_and_library_from_model_for(cli_module):
     assert captured["library"] == "transformers"
 
 
+def test_export_subcommand_defaults_task_and_library_from_vision_model_for(cli_module):
+    module, captured = cli_module
+
+    module.main(
+        [
+            "export",
+            "--model-name",
+            "google/vit-base-patch16-224",
+            "--model-for",
+            "vision",
+        ]
+    )
+
+    assert captured["model_for"] == "vision"
+    assert captured["task"] == "feature-extraction"
+    assert captured["library"] == "transformers"
+
+
+def test_export_subcommand_defaults_task_and_library_from_vlm_model_for(cli_module):
+    module, captured = cli_module
+
+    module.main(
+        [
+            "export",
+            "--model-name",
+            "llava-hf/llava-1.5-7b-hf",
+            "--model-for",
+            "vlm",
+        ]
+    )
+
+    assert captured["model_for"] == "vlm"
+    assert captured["task"] == "text-generation-with-past"
+    assert captured["library"] == "transformers"
+
+
 def test_export_subcommand_keeps_user_task_and_library(cli_module):
     module, captured = cli_module
 

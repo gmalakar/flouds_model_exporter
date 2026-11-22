@@ -15,21 +15,43 @@ import contextlib as _contextlib
 import io as _io
 import os
 import shutil as _shutil
-import subprocess as _subprocess
 import sys as _sys
 import tempfile as _tempfile
+import threading as _threading
 from typing import Any, Callable, List, Optional
 
+from model_exporter.errors import RemoteCodeNotAllowedError
 from model_exporter.export.helpers import cleanup_temporary_export_artifacts
 from model_exporter.export.legacy_fallback import run_legacy_v1_fallback
-from model_exporter.export.path_utils import safe_replace_export_dir
+from model_exporter.export.path_utils import STALE_TEMP_SECONDS, safe_replace_export_dir
 from model_exporter.export.pipeline_helpers import _remove_validation_marker, _write_validation_marker
+from model_exporter.export.source_ref import copy_or_clone
 from model_exporter.export.subprocess_runner import _run_main_export_subprocess
 from model_exporter.utils.helpers import get_default_opset, get_logger, safe_log
 from model_exporter.validation.checker import verify_models
 from model_exporter.validation.invoker import invoke_validator
 
 logger: Any = get_logger(__name__)
+
+# The last failure seen by the export running on this thread. The attempt functions
+# return only success or failure, so the reason is kept here for ``export()`` to put in
+# the error it raises; without it a caller learns only that "all attempts failed".
+_failure = _threading.local()
+
+
+def _note_failure(detail: Optional[str], exc: Optional[BaseException] = None) -> None:
+    _failure.detail = (detail or "").strip()[-4000:]
+    _failure.exc = exc if exc is not None else getattr(_failure, "exc", None)
+
+
+def reset_export_failure() -> None:
+    _failure.detail = ""
+    _failure.exc = None
+
+
+def last_export_failure() -> tuple[str, Optional[BaseException]]:
+    """``(detail, exception)`` of the most recent failed attempt on this thread."""
+    return getattr(_failure, "detail", ""), getattr(_failure, "exc", None)
 
 
 def _load_transformers_components(
@@ -51,15 +73,11 @@ def _load_transformers_components(
             return load_fn(*args, **kwargs)
         except ValueError as ve:
             msg = str(ve) or ""
-            if "trust_remote_code" in msg or "requires you to execute" in msg:
-                safe_log(
-                    logger,
-                    "warning",
-                    "Remote config requires `trust_remote_code=True` for %s; retrying with trust_remote_code=True",
-                    model_name,
-                )
-                kwargs["trust_remote_code"] = True
-                return load_fn(*args, **kwargs)
+            needs_remote_code = "trust_remote_code" in msg or "requires you to execute" in msg
+            if needs_remote_code and not kwargs.get("trust_remote_code"):
+                # Never raise the flag on the caller's behalf: that would run code from
+                # the model repository without anyone having agreed to it.
+                raise RemoteCodeNotAllowedError(model_name) from ve
             raise
 
     # Load tokenizer
@@ -75,8 +93,10 @@ def _load_transformers_components(
             _AutoTokenizer.from_pretrained,
             model_name,
             trust_remote_code=trust_remote_code,
-            use_auth_token=token,
+            token=token,
         )
+    except RemoteCodeNotAllowedError:
+        raise
     except Exception:
         tokenizer = None
 
@@ -93,8 +113,10 @@ def _load_transformers_components(
             _AutoModel.from_pretrained,
             model_name,
             trust_remote_code=trust_remote_code,
-            use_auth_token=token,
+            token=token,
         )
+    except RemoteCodeNotAllowedError:
+        raise
     except Exception:
         model = None
 
@@ -114,8 +136,10 @@ def _load_transformers_components(
             _AutoConfig.from_pretrained,
             model_name,
             trust_remote_code=trust_remote_code,
-            use_auth_token=token,
+            token=token,
         )
+    except RemoteCodeNotAllowedError:
+        raise
     except Exception:
         config = None
 
@@ -153,7 +177,7 @@ def export_onnx_fallback(me_kwargs: dict[str, Any]) -> None:
     output_dir = me_kwargs.get("output") or me_kwargs.get("output_dir")
     task = me_kwargs.get("task")
     opset = int(me_kwargs.get("opset", 17))
-    trust_remote_code = bool(me_kwargs.get("trust_remote_code", True))
+    trust_remote_code = bool(me_kwargs.get("trust_remote_code", False))
 
     # Optional parameters that may or may not exist
     token = (
@@ -264,7 +288,17 @@ def _prepare_strategy(
     """
     try:
         me_try: dict = base_kwargs.copy()
-        cleanup: Optional[Callable[[], None]] = None
+
+        # The local, snapshot and clone strategies all load with trust_remote_code.
+        # They are only offered when the caller allowed it; refuse here as well so no
+        # other caller of this function can switch it on by accident.
+        needs_remote_code = any(fb_kwargs.get(k) for k in ("__use_local__", "__snapshot__", "__clone__"))
+        if needs_remote_code and not base_kwargs.get("trust_remote_code"):
+            return (
+                None,
+                None,
+                "strategy loads with trust_remote_code, which the caller did not allow",
+            )
 
         # Local path strategy
         if fb_kwargs.get("__use_local__"):
@@ -275,77 +309,30 @@ def _prepare_strategy(
                 return me_try, lambda: None, None
             return None, None, "local path not available"
 
-        # Snapshot strategy
-        if fb_kwargs.get("__snapshot__"):
-            tmp = _tempfile.mkdtemp(prefix="onnx_opt_clone_")
+        # Snapshot and clone strategies export from a temporary local copy.
+        if fb_kwargs.get("__snapshot__") or fb_kwargs.get("__clone__"):
+            snapshot = bool(fb_kwargs.get("__snapshot__"))
+            tmp = _tempfile.mkdtemp(prefix="onnx_opt_clone_" if snapshot else "onnx_export_")
+
+            def _cleanup() -> None:
+                _shutil.rmtree(tmp, ignore_errors=True)
+
             try:
-                try:
+                if snapshot:
                     from model_exporter.export.helpers import prepare_local_model_dir
-                except Exception:
-                    return None, None, "prepare_local_model_dir unavailable"
 
-                ok = prepare_local_model_dir(str(export_source), tmp, True, logger)
-                if not ok:
-                    try:
-                        _shutil.rmtree(tmp)
-                    except Exception:
-                        pass
-                    return None, None, "prepare_local_model_dir failed"
-
-                me_try["model_name_or_path"] = tmp
-                me_try["trust_remote_code"] = True
-
-                def _cleanup() -> None:
-                    try:
-                        _shutil.rmtree(tmp)
-                    except Exception:
-                        pass
-
-                return me_try, _cleanup, None
-            except Exception:
-                try:
-                    _shutil.rmtree(tmp)
-                except Exception:
-                    pass
-                return None, None, "prepare_local_model_dir failed"
-        # Clone strategy
-        if fb_kwargs.get("__clone__"):
-            tmp = _tempfile.mkdtemp(prefix="onnx_export_")
-            repo = str(export_source)
-            try:
-                # If source is local dir, copy; otherwise clone from HF
-                if os.path.exists(repo) and os.path.isdir(repo):
-                    try:
-                        _shutil.copytree(repo, tmp, dirs_exist_ok=True)
-                    except TypeError:
-                        _shutil.copytree(repo, tmp)
+                    if not prepare_local_model_dir(str(export_source), tmp, True, logger):
+                        _cleanup()
+                        return None, None, "prepare_local_model_dir failed"
                 else:
-                    repo_to_clone = repo
-                    try:
-                        if ("/" in repo) and (not repo.startswith("http://")) and (not repo.startswith("https://")) and (not os.path.exists(repo)):
-                            repo_to_clone = f"https://huggingface.co/{repo}"
-                    except Exception:
-                        repo_to_clone = repo
-
-                    _subprocess.check_call(["git", "clone", "--depth", "1", repo_to_clone, tmp])
-
-                me_try["model_name_or_path"] = tmp
-                me_try["trust_remote_code"] = True
-
-                def _cleanup() -> None:
-                    try:
-                        _shutil.rmtree(tmp)
-                    except Exception:
-                        pass
-
-                cleanup = _cleanup
-                return me_try, cleanup, None
+                    copy_or_clone(str(export_source), tmp)
             except Exception as e:
-                try:
-                    _shutil.rmtree(tmp)
-                except Exception:
-                    pass
-                return None, None, str(e)
+                _cleanup()
+                return None, None, str(e) or type(e).__name__
+
+            me_try["model_name_or_path"] = tmp
+            me_try["trust_remote_code"] = True
+            return me_try, _cleanup, None
 
         # Normal strategy: just update kwargs
         me_try.update({k: v for k, v in fb_kwargs.items() if not k.startswith("__")})
@@ -807,6 +794,8 @@ def _attempt_inprocess_export(
                     if stderr
                     else f"{type(captured_exception).__name__}: {str(captured_exception)}"
                 )
+            if not ok:
+                _note_failure(stderr, captured_exception)
 
             if ok and child_tmp:
                 _move_working_to_output(working_output, output_dir, logger)
@@ -836,6 +825,32 @@ def _attempt_inprocess_export(
     return ok, stderr, child_tmp
 
 
+def _record_fallback(output_dir: str, fb_name: str, fb_kwargs: dict, logger: Any) -> None:
+    """Write which fallback produced the artifact, and what it changed, next to it."""
+    import json as _json
+
+    changed = {k: v for k, v in fb_kwargs.items() if not k.startswith("__")}
+    record = {"fallback": fb_name, "changed": changed}
+    try:
+        with open(os.path.join(output_dir, "export_fallback.json"), "w", encoding="utf-8") as fh:
+            _json.dump(record, fh, indent=2, sort_keys=True)
+    except OSError as exc:
+        safe_log(
+            logger,
+            "warning",
+            "Could not record the fallback used for %s: %s",
+            output_dir,
+            exc,
+        )
+    safe_log(
+        logger,
+        "warning",
+        "Export succeeded only with fallback '%s' (%s); the artifact differs from what was requested",
+        fb_name,
+        changed or "source changed",
+    )
+
+
 def _execute_fallback_loop(
     me_kwargs: dict,
     stderr: str,
@@ -844,8 +859,14 @@ def _execute_fallback_loop(
     output_dir: str,
     trust_remote_code: bool,
     logger: Any,
+    allow_precision_fallback: bool = False,
 ) -> tuple[bool, bool]:
     """Execute fallback strategies based on error patterns.
+
+    A strategy that changes numeric precision (``dtype``) produces a different model
+    from the one requested, so it only runs when *allow_precision_fallback* is set.
+    Whichever strategy succeeds is recorded in ``export_fallback.json`` next to the
+    model, so the change is visible to whoever uses the artifact.
 
     Returns (success, used_trust_remote_code) tuple.
     """
@@ -856,6 +877,15 @@ def _execute_fallback_loop(
         fallbacks = _build_fallback_strategies(err, trust_remote_code)
 
         for fb_name, fb_kwargs in fallbacks:
+            if "dtype" in fb_kwargs and not allow_precision_fallback:
+                safe_log(
+                    logger,
+                    "warning",
+                    "Skipping fallback '%s': it would export with %s instead of the requested precision. " "Set use_fallback_if_failed to allow it.",
+                    fb_name,
+                    fb_kwargs.get("dtype"),
+                )
+                continue
             safe_log(
                 logger,
                 "info",
@@ -887,15 +917,17 @@ def _execute_fallback_loop(
 
             if ok_fb:
                 _move_working_to_output(working_output, output_dir, logger)
+                _record_fallback(output_dir, fb_name, fb_kwargs, logger)
                 safe_log(
                     logger,
-                    "info",
+                    "warning",
                     "v2 main_export (fallback: %s) saved artifacts to %s",
                     fb_name,
                     output_dir,
                 )
                 return True, bool(me_try.get("trust_remote_code", trust_remote_code))
 
+            _note_failure(stderr_fb)
             safe_log(logger, "warning", "Fallback '%s' failed: %s", fb_name, stderr_fb)
 
         safe_log(logger, "info", "All configured fallbacks exhausted")
@@ -922,6 +954,8 @@ def export_v2_main_export(
     no_post_process: bool = False,
     merge: bool = False,
     use_subprocess: bool = False,
+    allow_precision_fallback: bool = False,
+    revision: Optional[str] = None,
 ) -> tuple[bool, bool]:
     """Run optimum.exporters.onnx.main_export with sensible retries.
 
@@ -944,7 +978,7 @@ def export_v2_main_export(
     )
 
     try:
-        cleanup_temporary_export_artifacts(logger=logger, max_age_seconds=3600)
+        cleanup_temporary_export_artifacts(logger=logger, max_age_seconds=STALE_TEMP_SECONDS)
     except Exception:
         safe_log(logger, "debug", "Pre-export temp cleanup failed", exc_info=True)
     logger.info(
@@ -970,7 +1004,7 @@ def export_v2_main_export(
         "use_subprocess": use_subprocess,
     }
     try:
-        auto_cache = model_for in ["llm"]
+        auto_cache = model_for in ["llm", "vlm", "multimodal"]
         try:
             if auto_cache and str(task or "").lower().startswith("text-generation"):
                 me_kwargs["use_cache"] = True
@@ -989,16 +1023,20 @@ def export_v2_main_export(
     if working_output != output_dir:
         me_kwargs["output"] = working_output
 
-    if use_auth_token:
-        me_kwargs["use_auth_token"] = True
+    if revision:
+        me_kwargs["revision"] = revision
+    # The token goes to the exporter as an argument. It is not written to the
+    # environment or saved by a login, so it lasts exactly as long as this call.
     if auth_token:
-        me_kwargs["use_auth_token"] = auth_token
+        me_kwargs["token"] = auth_token
+    elif use_auth_token:
+        me_kwargs["token"] = True
 
     safe_log(
         logger,
         "debug",
         "Prepared main_export kwargs (pre-trust/library): %s",
-        dict(me_kwargs),
+        _sanitize_kwargs_for_logging(me_kwargs),
     )
 
     if not framework:
@@ -1034,6 +1072,8 @@ def export_v2_main_export(
         if not ok:
             if use_subprocess:
                 ok, stderr = _run_main_export_subprocess(me_kwargs, logger)
+                if not ok:
+                    _note_failure(stderr)
             else:
                 safe_log(
                     logger,
@@ -1053,6 +1093,7 @@ def export_v2_main_export(
             output_dir,
             trust_remote_code,
             logger,
+            allow_precision_fallback=allow_precision_fallback,
         )
         if ok_fb:
             return True, used_trust
@@ -1073,7 +1114,7 @@ def export_v2_main_export(
     finally:
         try:
             prefixes = ("onnx_out_", "onnx_export_", "onnx_opt_clone_", "onnx_working_")
-            cleanup_temporary_export_artifacts(logger=logger, prefixes=prefixes, max_age_seconds=300)
+            cleanup_temporary_export_artifacts(logger=logger, prefixes=prefixes, max_age_seconds=STALE_TEMP_SECONDS)
         except Exception:
             safe_log(logger, "debug", "Fallback export temp cleanup failed", exc_info=True)
 
@@ -1169,6 +1210,8 @@ def _run_export_with_fallback(
     merge: bool = False,
     use_subprocess: bool = False,
     use_fallback_if_failed: bool = False,
+    auth_token: str | None = None,
+    revision: str | None = None,
 ) -> tuple[bool, bool]:
     """Try v2 export with opset retry and trust_remote_code fallback.
 
@@ -1216,6 +1259,9 @@ def _run_export_with_fallback(
             no_post_process=no_post_process,
             merge=merge,
             use_subprocess=use_subprocess,
+            auth_token=auth_token,
+            allow_precision_fallback=use_fallback_if_failed,
+            revision=revision,
         )
         if v2_ok:
             export_succeeded = True
@@ -1246,6 +1292,7 @@ def _run_export_with_fallback(
                 no_post_process=no_post_process,
                 merge=merge,
                 use_subprocess=use_subprocess,
+                token=auth_token,
             )
             if legacy_ok:
                 export_succeeded = True

@@ -13,6 +13,10 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+# Temporary export directories older than this are treated as abandoned. Anything
+# younger may belong to an export that is still running, in this process or another.
+STALE_TEMP_SECONDS = 6 * 3600
+
 
 def _validate_child_dir(path: str | Path, allowed_parent: str | Path) -> Path:
     """Return resolved *path* after proving it is below *allowed_parent*."""

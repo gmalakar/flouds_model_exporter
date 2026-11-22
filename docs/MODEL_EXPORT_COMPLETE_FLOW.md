@@ -34,6 +34,7 @@ src/model_exporter/
 +-- config/
 |   +-- logging.py
 |   +-- policy.yaml
++-- errors.py
 +-- export/
 |   +-- pipeline.py
 |   +-- pipeline_helpers.py
@@ -43,6 +44,7 @@ src/model_exporter/
 |   +-- helpers.py
 |   +-- options.py
 |   +-- path_utils.py
+|   +-- source_ref.py
 |   +-- subprocess_runner.py
 +-- utils/
 +-- validation/
@@ -58,7 +60,9 @@ src/model_exporter/
 2. Export
    - Primary path uses `optimum.exporters.onnx.main_export`.
    - Export settings are derived from `--model-for`, optional task/library overrides, opset, device, and portability flags.
-   - The pipeline can retry with safer fallback settings if the first export strategy fails.
+   - In subprocess mode the pipeline can retry with other settings if the first strategy fails. A retry that lowers numeric precision to float16 only runs with `--use-fallback-if-failed`. Whichever retry produces the model is recorded in `export_fallback.json` in the output directory.
+   - `--revision` exports a specific branch, tag or commit.
+   - A Hugging Face token is passed to the hub for this export only; it is not saved.
 
 3. Verification and validation
    - Structural verification checks expected ONNX artifacts and basic session loadability.
@@ -205,7 +209,9 @@ flouds-export export --model-name microsoft/Phi-3.5-mini-instruct --model-for ll
 | `RuntimeError` about 2 GiB protobuf size | Use `--use-external-data-format`. |
 | Unsupported or failing opset | Retry with `--opset-version 14` or `11`. |
 | Validation mismatch | Re-run without optimization first, then compare with `--normalize-embeddings` when applicable. |
-| Remote-code requirement | Add `--trust-remote-code` only after reviewing the model repository. |
+| Remote-code requirement | Add `--trust-remote-code` only after reviewing the model repository. The exporter never enables it by itself. |
+| `An export to ... is already running` | Another process is exporting to the same directory. Wait for it, or delete a stale `.export.lock`. |
+| `All export attempts failed for model ...: <reason>` | The text after the colon is the last error reported; the full output is in the log. |
 
 Logs go to the terminal by default. When `--log-to-file` is enabled, file logs are written under `logs/onnx_exports/` in the current working directory unless overridden by `LOG_DIR`. Use `LOG_LEVEL=DEBUG` for more verbose logs.
 

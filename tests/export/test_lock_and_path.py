@@ -53,6 +53,8 @@ def _make_fake_modules(monkeypatch):
 
     fake_pipeline_v2._run_export_with_fallback = lambda *a, **kw: (True, False)
     fake_pipeline_v2._run_post_optimization_validator = lambda *a, **kw: 0
+    fake_pipeline_v2.last_export_failure = lambda: ("", None)
+    fake_pipeline_v2.reset_export_failure = lambda: None
 
     # pipeline_helpers: expose only what pipeline.py imports from it
     import contextlib

@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "release/**"]
   pull_request:
 
 permissions:
@@ -112,6 +112,62 @@ jobs:
       - name: Validate package metadata
         run: twine check dist/*
 
+
+  integration:
+    # A real export: downloads a tiny model, exports it and runs the result. The unit
+    # tests replace the exporter with fakes, so this is the only job that shows an
+    # export works with the dependency versions pip resolves today.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install the package with CPU PyTorch
+        run: |
+          python -m pip install --upgrade pip
+          # CPU-only PyTorch first: smaller and faster than the default build.
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -e ".[dev]"
+
+      - name: Export a tiny model and run it
+        run: pytest -m integration tests/integration
+
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install the package and scanners
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+          python -m pip install bandit pip-audit
+
+      - name: Static security analysis (bandit, medium and above)
+        # B615 (no revision pinning) is skipped: which revision to export is the caller's
+        # choice, made with the `revision` option.
+        run: bandit -r src -ll -s B615
+
+      - name: Known vulnerabilities in installed dependencies
+        run: pip-audit --skip-editable -s osv
 
   docs-and-cli-sanity:
     runs-on: ubuntu-latest

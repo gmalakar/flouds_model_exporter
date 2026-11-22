@@ -810,6 +810,14 @@ def prepare_local_model_dir(model_name: str, dest_dir: str, trust_remote_code: b
             # a local snapshot of the repo and retry with trust_remote_code=True.
             try:
                 low_msg = msg.lower()
+                if not trust_remote_code:
+                    # The retry below loads the repository's own code. Without the
+                    # caller's consent there is nothing more to try.
+                    logger.warning(
+                        "Model %s could not be loaded and trust_remote_code was not allowed; not retrying from a snapshot",
+                        model_name,
+                    )
+                    return False
                 if "model type" in low_msg or "does not recognize" in low_msg or "not recognize" in low_msg:
                     try:
                         from huggingface_hub import snapshot_download
@@ -877,11 +885,11 @@ def prepare_local_model_dir(model_name: str, dest_dir: str, trust_remote_code: b
                             model = AutoModelForCausalLM.from_pretrained(
                                 tmp_snap,
                                 low_cpu_mem_usage=True,
-                                trust_remote_code=True,
+                                trust_remote_code=trust_remote_code,
                             )
                             used_local_snapshot = True
                         except TypeError:
-                            model = AutoModelForCausalLM.from_pretrained(tmp_snap, trust_remote_code=True)
+                            model = AutoModelForCausalLM.from_pretrained(tmp_snap, trust_remote_code=trust_remote_code)
                         logger.info("Loaded model from local snapshot for %s", model_name)
                     except Exception as retry_exc:
                         logger.exception(

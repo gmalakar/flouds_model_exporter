@@ -898,6 +898,8 @@ def main(argv: List[str] | None = None) -> int:
                 pass
 
             try:
+                if ref_token_embeddings is None:
+                    raise ValueError("the reference model produced no token embeddings to compare")
                 collect_diagnostics(
                     model_dir=model_dir,
                     results=results,

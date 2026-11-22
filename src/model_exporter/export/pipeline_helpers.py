@@ -19,6 +19,7 @@ import time
 from contextlib import contextmanager
 from typing import Any, Iterator, List, Optional
 
+from model_exporter.errors import ExportInProgressError, ExportValidationError
 from model_exporter.export.helpers import cleanup_validator_logging_handlers, is_pid_running
 from model_exporter.utils.helpers import get_logger, safe_log
 from model_exporter.validation.invoker import invoke_validator
@@ -105,9 +106,9 @@ def _auto_enable_use_cache(model_name: str, model_for: str, task: str | None) ->
         )
         return True
 
-    if mf in {"llm"}:
+    if mf in {"llm", "vlm", "multimodal"}:
         logger.info(
-            "Model %s is an LLM (%s); enabling use_cache",
+            "Model %s is a generative model (%s); enabling use_cache",
             model_name,
             model_for,
         )
@@ -201,7 +202,7 @@ def _create_export_lock(output_dir: str, model_name: str, logger: Any) -> tuple[
                     "An export for this model is already running (pid=%s). Exiting.",
                     pid,
                 )
-                raise SystemExit(0)
+                raise ExportInProgressError(output_dir, pid)
             else:
                 age = (now - ts) if ts else None
                 # The owner PID is no longer running — always attempt removal.
@@ -225,7 +226,7 @@ def _create_export_lock(output_dir: str, model_name: str, logger: Any) -> tuple[
                             "Could not remove recent lock file; exiting to avoid race: %s",
                             lock_path,
                         )
-                        raise SystemExit(0)
+                        raise ExportInProgressError(output_dir)
                     else:
                         logger.warning("Could not remove stale lock file: %s", lock_path)
 
@@ -236,8 +237,8 @@ def _create_export_lock(output_dir: str, model_name: str, logger: Any) -> tuple[
             logger.info("Acquired export lock: %s", lock_path)
         except FileExistsError:
             logger.info("Lock file created by concurrent process; exiting")
-            raise SystemExit(0)
-    except SystemExit:
+            raise ExportInProgressError(output_dir)
+    except ExportInProgressError:
         raise
     except Exception:
         logger.warning("Could not create or check export lock; proceeding without exclusive lock")
@@ -286,7 +287,7 @@ def _requires_trust_remote_code_fast(model_name: str, token: str | None = None) 
         _ = AutoConfig.from_pretrained(
             model_name,
             trust_remote_code=False,
-            use_auth_token=token,
+            token=token,
         )
         return False
     except Exception as e:
@@ -401,57 +402,25 @@ def _should_skip_validator(model_for: str, pack_single_file: bool, expected: Lis
 
 
 def _setup_huggingface_hub_token(token: str | None, logger: Any) -> tuple[str | None, dict]:
-    """Setup Hugging Face token: extract from argument/env, set hub token, login.
+    """Return the Hugging Face token to use for this export.
 
-    ``HUGGINGFACE_HUB_TOKEN`` is the canonical token environment variable for
-    this exporter.
+    The token given by the caller wins; otherwise ``HUGGINGFACE_HUB_TOKEN`` or
+    ``HF_TOKEN`` from the environment is used. The token is passed to the hub calls as
+    an argument. It is not written to the environment and no login is performed: a
+    login saves the token on disk as the machine's default credential, which would
+    make one caller's token the credential for every later export.
 
-    Returns (token, flags_dict) where flags_dict tracks whether the env var was set.
+    Returns ``(token, flags)``. ``flags`` is kept for callers of the previous version
+    and always reports that nothing was changed.
     """
-    flags = {"set_hub": False, "login_ok": False}
-
-    if not token:
-        token = os.environ.get("HUGGINGFACE_HUB_TOKEN")
-
-    if token:
-        try:
-            if os.environ.get("HUGGINGFACE_HUB_TOKEN") is None:
-                os.environ["HUGGINGFACE_HUB_TOKEN"] = token
-                flags["set_hub"] = True
-        except Exception:
-            logger.debug("Could not set HUGGINGFACE_HUB_TOKEN environment variable")
-
-        try:
-            from huggingface_hub import login as _hf_login
-
-            _hf_login(token=token, add_to_git_credential=False)
-            flags["login_ok"] = True
-            logger.info("Logged into Hugging Face hub for this session via provided token")
-        except Exception:
-            try:
-                import huggingface_hub as _hfh
-
-                _hfh.login(token=token, add_to_git_credential=False)
-                flags["login_ok"] = True
-                logger.info("Logged into Hugging Face hub for this session via provided token")
-            except Exception as e:
-                logger.debug("huggingface_hub.login failed: %s", e)
-                logger.warning("Hugging Face login failed; will continue without token")
-
-    return token, flags
+    del logger
+    resolved = token or os.environ.get("HUGGINGFACE_HUB_TOKEN") or os.environ.get("HF_TOKEN") or None
+    return resolved, {"set_hub": False, "login_ok": False}
 
 
 def _teardown_huggingface_hub_token(flags: dict, logger: Any) -> None:
-    """Cleanup HUGGINGFACE_HUB_TOKEN if this process set it and login failed."""
-    try:
-        if not flags.get("login_ok", False):
-            if flags.get("set_hub"):
-                try:
-                    os.environ.pop("HUGGINGFACE_HUB_TOKEN", None)
-                except Exception:
-                    pass
-    except Exception:
-        logger.debug("HF token teardown failed", exc_info=True)
+    """Nothing to undo: the export no longer changes the environment or logs in."""
+    del flags, logger
 
 
 def _setup_tokenizer_pad_token(output_dir: str, trust_remote_code: bool, logger: Any) -> None:
@@ -559,7 +528,7 @@ def _run_numeric_validator(
             logger.debug("Could not remove validation_dumps directory")
 
     if require_validator and validator_rc != 0:
-        raise SystemExit(validator_rc)
+        raise ExportValidationError(output_dir, validator_rc)
 
     return validator_rc, False
 
