@@ -1,6 +1,6 @@
 # Production Readiness Audit
 
-Reviewed 2026-11-21 against `main` at 1.0.1, with the fixes on `release/2.0.0`.
+Reviewed 2026-11-21 against 1.0.1. The fixes were released as 2.0.0 on 2026-11-24.
 
 **Score: 4 / 10 before, about 7 / 10 after.** The exporter worked on the happy path, but as a
 library called by a service it could run remote code without consent, kept callers' tokens,

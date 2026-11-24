@@ -6,7 +6,18 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
-## [2.0.0] - 2026-11-21
+## [2.0.1] - 2026-11-24
+
+Documentation only; no code changes.
+
+### Changed
+
+- README: the command-line reference lists all eight `--model-for` types (`vision`, `clip`, `vlm` and `multimodal` were missing), documents `--model-folder` and `--quantize`, and the validate options `--texts`, `--atol`, `--rtol` and `--skip-diagnostics`.
+- README: the Python API table lists every `export()` parameter (ten were missing, including `force`, `model_folder`, `library` and `cleanup`).
+- `docs/MODEL_EXPORT_COMPLETE_FLOW.md`: the model-type table includes the four newer types.
+- The 2.0.0 release date is corrected to 2026-11-24.
+
+## [2.0.0] - 2026-11-24
 
 Breaking changes are marked **Breaking**. See "Upgrading from 1.x" in the README.
 

@@ -274,6 +274,13 @@ Validate an exported ONNX model against its reference Hugging Face model:
 flouds-export validate --model-dir onnx/models/fe/all-MiniLM-L6-v2 --reference-model sentence-transformers/all-MiniLM-L6-v2 --normalize-embeddings
 ```
 
+| Option | Default | Description |
+|---|---|---|
+| `--texts` | built-in samples | Example texts to run through both models |
+| `--atol` | `1e-4` | Absolute tolerance for the largest difference |
+| `--rtol` | `1e-3` | Relative tolerance |
+| `--skip-diagnostics` | off | Do not write diagnostic dumps when validation fails |
+
 ### Optimize Existing Exported Models
 
 Run the shared optimizer service against an already-exported ONNX directory:
@@ -367,6 +374,16 @@ export(
 | `require_validator` | `bool` | `False` | Raise `ExportValidationError` if validation fails |
 | `quantize` | any | `False` | Quantization configuration |
 | `huggingface_hub_token` | `str` | `None` | Hugging Face auth token, used for this export only |
+| `model_folder` | `str` | last part of `model_name` | Folder name under `<onnx_path>/models/<model_for>/` |
+| `force` | `bool` | `False` | Re-export even when the expected files already exist |
+| `library` | `str` | from `model_for` | Export library override, for example `transformers` |
+| `portable` | `bool` | `False` | Conservative optimizations for cross-machine compatibility; needs `optimize` |
+| `pack_single_threshold_mb` | `int` | `1536` | Size limit for `pack_single_file` repacking |
+| `no_post_process` | `bool` | `False` | Skip the exporter's ONNX post-processing (saves memory on large models) |
+| `no_local_prep` | `bool` | `False` | Skip local model preparation for LLMs |
+| `cleanup` | `bool` | `False` | Remove temporary and redundant files after export |
+| `prune_canonical` | `bool` | `False` | Remove canonical models when a merged one exists; needs `cleanup` |
+| `log_to_file` | `bool` | `False` | Also write a per-export log file (see Export Logs) |
 | `revision` | `str` | `None` | Branch, tag or commit of the model repository; use a commit hash for a reproducible export |
 
 `from model_exporter import export_model` is the same function under a name that cannot be confused with the `model_exporter.export` sub-package.
@@ -405,7 +422,7 @@ All of them derive from `ExporterError`.
 | Parameter | Values | Description |
 |-----------|--------|-------------|
 | `--model-name` | `str` | HuggingFace model ID or local path |
-| `--model-for` | `fe`, `s2s`, `ranker`, `llm` | Model type. Also supplies default `--task` and `--library` when omitted |
+| `--model-for` | `fe`, `s2s`, `ranker`, `llm`, `vision`, `clip`, `vlm`, `multimodal` | Model type. Also supplies default `--task` and `--library` when omitted |
 | `--task` | `str` | Optional export task override |
 | `--framework` | `pt`, `tf` | Framework: PyTorch or TensorFlow |
 | `--device` | `cpu`, `cuda` | Target device |
@@ -422,6 +439,8 @@ All of them derive from `ExporterError`.
 | `--opset-version` | `17` | ONNX opset version (11, 14, or 17) |
 | `--trust-remote-code` | `false` | Allow custom model code execution. Review the model code first. |
 | `--force` | `false` | Overwrite existing exports |
+| `--model-folder` | last part of `--model-name` | Folder name under `<onnx-path>/models/<model-for>/` |
+| `--quantize` | off | Also write quantized variants: `dynamic_int8`, `fp16`, or `both` |
 
 ### Optimization & Validation
 

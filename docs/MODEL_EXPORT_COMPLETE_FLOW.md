@@ -84,6 +84,10 @@ src/model_exporter/
 | Seq2seq encoder-decoder | `s2s` | `seq2seq-lm` |
 | Cross-encoder / ranking | `ranker` | `sequence-classification` |
 | Decoder-only LLM | `llm` | `text-generation-with-past` |
+| Vision encoder | `vision` | `feature-extraction` |
+| CLIP-style dual encoder | `clip` | `feature-extraction` |
+| Vision-language model | `vlm` | `text-generation-with-past` |
+| Other multimodal generator | `multimodal` | `text-generation-with-past` |
 
 Notes:
 
