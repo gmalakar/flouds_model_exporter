@@ -32,6 +32,11 @@ def _add_validate_arguments(parser):
         help="Hugging Face model id to use as reference",
     )
     parser.add_argument(
+        "--revision",
+        default=None,
+        help="Branch, tag or commit of the reference model repository (default: its main branch)",
+    )
+    parser.add_argument(
         "--texts",
         nargs="*",
         default=None,
@@ -99,6 +104,8 @@ def _run_validate(args):
         str(args.rtol),
     ]
 
+    if getattr(args, "revision", None):
+        validate_argv += ["--revision", args.revision]
     if args.texts:
         validate_argv.append("--texts")
         validate_argv.extend(args.texts)

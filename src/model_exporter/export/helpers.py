@@ -753,12 +753,20 @@ def cleanup_temporary_export_artifacts(
         )
 
 
-def prepare_local_model_dir(model_name: str, dest_dir: str, trust_remote_code: bool, logger: Any) -> bool:
+def prepare_local_model_dir(
+    model_name: str,
+    dest_dir: str,
+    trust_remote_code: bool,
+    logger: Any,
+    revision: str | None = None,
+) -> bool:
     """Prepare a local copy of `model_name` under `dest_dir`.
 
     Loads the model with reduced memory flags where supported, calls the
     model's `tie_weights()`/`tie_word_embeddings()` helper to canonicalize
     shared tensors, and saves the model and tokenizer to `dest_dir`.
+    Every Hugging Face Hub download uses `revision` (branch, tag or commit;
+    None means the repository's default branch).
 
     Returns True on success, False otherwise. This is safe to call from the
     exporter orchestrator to avoid duplicate initializer issues in ONNX.
@@ -791,6 +799,7 @@ def prepare_local_model_dir(model_name: str, dest_dir: str, trust_remote_code: b
             logger.info("Loading model %s (low_cpu_mem_usage=True) ...", model_name)
             model = AutoModelForCausalLM.from_pretrained(
                 model_name,
+                revision=revision,
                 low_cpu_mem_usage=True,
                 trust_remote_code=trust_remote_code,
             )
@@ -800,6 +809,7 @@ def prepare_local_model_dir(model_name: str, dest_dir: str, trust_remote_code: b
             logger.info("low_cpu_mem_usage not supported; loading model without it")
             model = AutoModelForCausalLM.from_pretrained(
                 model_name,
+                revision=revision,
                 trust_remote_code=trust_remote_code,
             )
             logger.info("Model loaded (fallback): %s", getattr(model, "__class__", type(model)))
@@ -858,8 +868,11 @@ def prepare_local_model_dir(model_name: str, dest_dir: str, trust_remote_code: b
                             model_name,
                             tmp_snap,
                         )
-                        snapshot_download(
+                        # snapshot_download returns the folder holding the files; with
+                        # cache_dir they sit below tmp_snap in the hub cache layout.
+                        snap_path = snapshot_download(
                             repo_id=model_name,
+                            revision=revision,
                             cache_dir=tmp_snap,
                             local_files_only=False,
                         )
@@ -882,14 +895,14 @@ def prepare_local_model_dir(model_name: str, dest_dir: str, trust_remote_code: b
 
                     try:
                         try:
-                            model = AutoModelForCausalLM.from_pretrained(
-                                tmp_snap,
+                            model = AutoModelForCausalLM.from_pretrained(  # nosec B615 - local path
+                                snap_path,
                                 low_cpu_mem_usage=True,
                                 trust_remote_code=trust_remote_code,
                             )
                             used_local_snapshot = True
                         except TypeError:
-                            model = AutoModelForCausalLM.from_pretrained(tmp_snap, trust_remote_code=trust_remote_code)
+                            model = AutoModelForCausalLM.from_pretrained(snap_path, trust_remote_code=trust_remote_code)  # nosec B615 - local path
                         logger.info("Loaded model from local snapshot for %s", model_name)
                     except Exception as retry_exc:
                         logger.exception(
@@ -996,12 +1009,14 @@ def prepare_local_model_dir(model_name: str, dest_dir: str, trust_remote_code: b
             trc_for_tok = trust_remote_code or used_local_snapshot
             tok = None
             try:
-                tok = AutoTokenizer.from_pretrained(dest_dir, use_fast=False, trust_remote_code=trc_for_tok)
+                tok = AutoTokenizer.from_pretrained(dest_dir, use_fast=False, trust_remote_code=trc_for_tok)  # nosec B615 - local path
             except Exception:
-                try:
-                    tok = AutoTokenizer.from_pretrained(model_name, use_fast=False, trust_remote_code=trc_for_tok)
-                except TypeError:
-                    tok = AutoTokenizer.from_pretrained(model_name, use_fast=False, trust_remote_code=trc_for_tok)
+                tok = AutoTokenizer.from_pretrained(
+                    model_name,
+                    revision=revision,
+                    use_fast=False,
+                    trust_remote_code=trc_for_tok,
+                )
             if tok is not None:
                 tok.save_pretrained(dest_dir)
                 logger.info("Saved tokenizer to %s", dest_dir)

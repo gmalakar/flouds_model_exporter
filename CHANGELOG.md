@@ -6,6 +6,19 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+### Fixed
+
+- `revision` (`--revision`) reaches every Hugging Face Hub download, not only `main_export`: the LLM local preparation (model, snapshot and tokenizer), the `use_cache` and `trust_remote_code` config checks, the fallback exporter's tokenizer, model and config loads, and the numeric validator's reference model, tokenizer and `1_Pooling/config.json`. Before, these read the repository's default branch even when a commit was pinned, so the export could mix two revisions.
+- LLM local preparation: the snapshot retry now loads the folder `snapshot_download` returns; it loaded the cache root, which holds no model files.
+
+### Added
+
+- `flouds-export validate --revision` and `validate_onnx(revision=...)` choose the reference model's revision.
+
+### Security
+
+- bandit B615 (Hugging Face download without a pinned revision) is no longer skipped in the pre-commit hook or the CI security job. Calls that load from a local folder carry `# nosec B615 - local path`.
+
 ## [2.0.2] - 2026-11-26
 
 ### Changed

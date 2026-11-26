@@ -273,8 +273,8 @@ def export(
 
     Path(_output_dir).mkdir(parents=True, exist_ok=True)
 
-    use_cache: bool = _resolve_use_cache(model_name, _model_for, task, logger)
-    trust_remote_code = _auto_resolve_trust_remote_code(model_name, token, trust_remote_code, logger)
+    use_cache: bool = _resolve_use_cache(model_name, _model_for, task, logger, revision=revision)
+    trust_remote_code = _auto_resolve_trust_remote_code(model_name, token, trust_remote_code, logger, revision=revision)
 
     # Setup per-run logging
     file_handler: Any | None = None
@@ -374,7 +374,7 @@ def export(
                         except Exception:
                             pass
                         os.makedirs(tmp_p, exist_ok=True)
-                        prep_ok = prepare_local_model_dir(model_name, tmp_p, trust_remote_code, logger)
+                        prep_ok = prepare_local_model_dir(model_name, tmp_p, trust_remote_code, logger, revision=revision)
                         if prep_ok:
                             export_source = tmp_p
                             prep_tmp_p = tmp_p
@@ -502,6 +502,7 @@ def export(
                             normalize_embeddings=normalize_embeddings,
                             logger=logger,
                             require_validator=require_validator,
+                            revision=revision,
                         )
                     except Exception as e:
                         logger.exception("Validator invocation failed: %s", e)

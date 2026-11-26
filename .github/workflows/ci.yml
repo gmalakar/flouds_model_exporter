@@ -162,9 +162,7 @@ jobs:
           python -m pip install bandit pip-audit
 
       - name: Static security analysis (bandit, medium and above)
-        # B615 (no revision pinning) is skipped: which revision to export is the caller's
-        # choice, made with the `revision` option.
-        run: bandit -r src -ll -s B615
+        run: bandit -r src -ll
 
       - name: Known vulnerabilities in installed dependencies
         run: pip-audit --skip-editable -s osv

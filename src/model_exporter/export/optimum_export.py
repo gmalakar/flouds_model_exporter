@@ -58,10 +58,12 @@ def _load_transformers_components(
     trust_remote_code: bool,
     token: Optional[str],
     logger: Any,
+    revision: Optional[str] = None,
 ) -> tuple[Any, Any, Any]:
     """Load tokenizer, model, and config from transformers with trust_remote_code retry.
 
-    Returns (tokenizer, model, config) tuple.
+    ``revision`` (branch, tag or commit) is passed to every load. Returns
+    (tokenizer, model, config) tuple.
     """
     from transformers import AutoConfig as _AutoConfig  # noqa: F401
     from transformers import AutoModel as _AutoModel  # noqa: F401
@@ -91,6 +93,7 @@ def _load_transformers_components(
         tokenizer = _attempt_load(
             _AutoTokenizer.from_pretrained,
             model_name,
+            revision=revision,
             trust_remote_code=trust_remote_code,
             token=token,
         )
@@ -111,6 +114,7 @@ def _load_transformers_components(
         model = _attempt_load(
             _AutoModel.from_pretrained,
             model_name,
+            revision=revision,
             trust_remote_code=trust_remote_code,
             token=token,
         )
@@ -134,6 +138,7 @@ def _load_transformers_components(
         config = _attempt_load(
             _AutoConfig.from_pretrained,
             model_name,
+            revision=revision,
             trust_remote_code=trust_remote_code,
             token=token,
         )
@@ -180,6 +185,7 @@ def export_onnx_fallback(me_kwargs: dict[str, Any]) -> None:
 
     # Optional parameters that may or may not exist
     token = me_kwargs.get("token") if isinstance(me_kwargs.get("token"), str) else None
+    revision = me_kwargs.get("revision") if isinstance(me_kwargs.get("revision"), str) else None
 
     # Additional optional parameters to pass through if supported
     # (These will be filtered dynamically later)
@@ -218,7 +224,7 @@ def export_onnx_fallback(me_kwargs: dict[str, Any]) -> None:
     tokenizer: Any
     model: Any
     config: Any
-    tokenizer, model, config = _load_transformers_components(model_name, trust_remote_code, token, lg)
+    tokenizer, model, config = _load_transformers_components(model_name, trust_remote_code, token, lg, revision)
 
     # Patch config with expected attributes for optimum
     _patch_config_for_optimum(config, model_name, lg)
@@ -315,7 +321,7 @@ def _prepare_strategy(
                 if snapshot:
                     from model_exporter.export.helpers import prepare_local_model_dir
 
-                    if not prepare_local_model_dir(str(export_source), tmp, True, logger):
+                    if not prepare_local_model_dir(str(export_source), tmp, True, logger, revision=base_kwargs.get("revision")):
                         _cleanup()
                         return None, None, "prepare_local_model_dir failed"
                 else:

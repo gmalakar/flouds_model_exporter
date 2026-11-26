@@ -42,9 +42,7 @@ repos:
     rev: 1.9.4
     hooks:
       - id: bandit
-        # B615 (Hugging Face download without a pinned revision, new in bandit 1.9):
-        # skipped until --revision reaches every hub call (known issue).
-        args: ['-ll', '--exclude', 'tests/', '--skip', 'B615']
+        args: ['-ll', '--exclude', 'tests/']
         additional_dependencies:
           - pbr
         exclude: ^(tests/|scripts/)

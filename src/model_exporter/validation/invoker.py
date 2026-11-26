@@ -26,6 +26,7 @@ def invoke_validator(
     trust_remote_code: bool,
     normalize_embeddings: bool,
     logger: Any,
+    revision: str | None = None,
 ) -> int:
     """Invoke the numeric ONNX validator for a completed export.
 
@@ -39,6 +40,7 @@ def invoke_validator(
             remote execution code.
         normalize_embeddings: Forward to the validator to request L2-normalized
             embedding comparison.
+        revision: Branch, tag or commit of the reference model to compare against.
         logger: A standard :class:`logging.Logger` (or compatible object) for
             diagnostic output.
 
@@ -78,6 +80,7 @@ def invoke_validator(
                     rtol=1e-3,
                     trust_remote_code=trust_flag,
                     normalize_embeddings=normalize_embeddings,
+                    revision=revision,
                 )
             except Exception as call_err:
                 logger.error("Programmatic validator raised an exception: %s", call_err)
@@ -98,6 +101,8 @@ def invoke_validator(
             ]
             if model_name:
                 args += ["--reference-model", str(model_name)]
+            if revision:
+                args += ["--revision", str(revision)]
             if trust_flag:
                 args += ["--trust-remote-code"]
             if normalize_embeddings:

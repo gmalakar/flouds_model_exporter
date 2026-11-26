@@ -67,7 +67,7 @@ def _build_expected_list(model_for: str, use_cache: bool, task: str | None = Non
     return names
 
 
-def _auto_enable_use_cache(model_name: str, model_for: str, task: str | None) -> bool:
+def _auto_enable_use_cache(model_name: str, model_for: str, task: str | None, revision: str | None = None) -> bool:
     """
     Decide whether to enable `use_cache` automatically.
 
@@ -128,7 +128,7 @@ def _auto_enable_use_cache(model_name: str, model_for: str, task: str | None) ->
     try:
         from transformers import AutoConfig
 
-        cfg = AutoConfig.from_pretrained(str(model_name))
+        cfg = AutoConfig.from_pretrained(str(model_name), revision=revision)
 
         is_enc_dec = getattr(cfg, "is_encoder_decoder", False)
         supports_cache = getattr(cfg, "use_cache", False)
@@ -266,7 +266,7 @@ def _with_export_lock(output_dir: str, model_name: str, logger: Any) -> Iterator
                 logger.debug("Could not remove lock file: %s", lock_path)
 
 
-def _requires_trust_remote_code_fast(model_name: str, token: str | None = None) -> bool:
+def _requires_trust_remote_code_fast(model_name: str, token: str | None = None, revision: str | None = None) -> bool:
     """Quickly determine whether a model requires ``trust_remote_code``.
 
     Attempts to load the model config without ``trust_remote_code=True`` and
@@ -276,6 +276,7 @@ def _requires_trust_remote_code_fast(model_name: str, token: str | None = None) 
     Args:
         model_name: HuggingFace model ID or local path.
         token: Optional HuggingFace API token for gated models.
+        revision: Branch, tag or commit of the model repository (None: default branch).
 
     Returns:
         ``True`` if the model config raises an error indicating that
@@ -286,6 +287,7 @@ def _requires_trust_remote_code_fast(model_name: str, token: str | None = None) 
 
         _ = AutoConfig.from_pretrained(
             model_name,
+            revision=revision,
             trust_remote_code=False,
             token=token,
         )
@@ -425,7 +427,7 @@ def _setup_tokenizer_pad_token(output_dir: str, trust_remote_code: bool, logger:
         return
 
     try:
-        tok = AutoTokenizer.from_pretrained(
+        tok = AutoTokenizer.from_pretrained(  # nosec B615 - local path
             output_dir,
             use_fast=False,
             trust_remote_code=trust_remote_code,
@@ -474,6 +476,7 @@ def _run_numeric_validator(
     normalize_embeddings: bool,
     logger: Any,
     require_validator: bool,
+    revision: str | None = None,
 ) -> None:
     """Run numeric validator with all setup and result handling."""
     try:
@@ -495,6 +498,7 @@ def _run_numeric_validator(
         trust_remote_code=trust_remote_code or used_trust_remote,
         normalize_embeddings=normalize_embeddings,
         logger=logger,
+        revision=revision,
     )
 
     if validator_rc != 0:
@@ -528,7 +532,7 @@ def _check_optimized_artifacts(output_dir: str) -> bool:
     return False
 
 
-def _resolve_use_cache(model_name: str, model_for: str, task: str | None, logger: Any) -> bool:
+def _resolve_use_cache(model_name: str, model_for: str, task: str | None, logger: Any, revision: str | None = None) -> bool:
     """Determine whether KV-cache exports should be enabled for this model.
 
     Checks model_for classification, runs HuggingFace config auto-detection,
@@ -540,13 +544,14 @@ def _resolve_use_cache(model_name: str, model_for: str, task: str | None, logger
         task: Optimum export task string; ``"with-past"`` suffix enables
             KV-cache, ``"seq2seq"`` disables it for s2s models.
         logger: Logger instance for informational messages.
+        revision: Branch, tag or commit used when the HuggingFace config is read.
 
     Returns:
         True if KV-cache exports should be enabled, False otherwise.
     """
     use_cache = False
     try:
-        auto_flag = _auto_enable_use_cache(model_name, model_for, task)
+        auto_flag = _auto_enable_use_cache(model_name, model_for, task, revision)
         if auto_flag:
             logger.info("Automatically enabling use_cache for model %s", model_name)
         use_cache = bool(auto_flag)
@@ -572,7 +577,7 @@ def _resolve_use_cache(model_name: str, model_for: str, task: str | None, logger
     return use_cache
 
 
-def _auto_resolve_trust_remote_code(model_name: str, token: Optional[str], trust_remote_code: bool, logger: Any) -> bool:
+def _auto_resolve_trust_remote_code(model_name: str, token: Optional[str], trust_remote_code: bool, logger: Any, revision: str | None = None) -> bool:
     """Return the caller-approved ``trust_remote_code`` setting.
 
     If ``trust_remote_code`` is already True, returns True immediately.
@@ -584,6 +589,7 @@ def _auto_resolve_trust_remote_code(model_name: str, token: Optional[str], trust
         token: Optional HuggingFace auth token for config fetch.
         trust_remote_code: Caller-supplied trust flag.
         logger: Logger instance for informational messages.
+        revision: Branch, tag or commit used for the config fetch.
 
     Returns:
         True only when the caller explicitly allowed ``trust_remote_code``.
@@ -591,7 +597,7 @@ def _auto_resolve_trust_remote_code(model_name: str, token: Optional[str], trust
     if trust_remote_code:
         return True
     try:
-        if _requires_trust_remote_code_fast(model_name, token):
+        if _requires_trust_remote_code_fast(model_name, token, revision):
             logger.warning(
                 "Model %s appears to require trust_remote_code, but remote code "
                 "execution was not explicitly allowed. Re-run with "

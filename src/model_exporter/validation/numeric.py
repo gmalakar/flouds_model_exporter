@@ -168,8 +168,10 @@ def _to_numpy(v: Any) -> Any:
     return v
 
 
-def _load_pooling_config(model_id: str) -> Dict[str, Any]:
+def _load_pooling_config(model_id: str, revision: str | None = None) -> Dict[str, Any]:
     """Load Sentence-Transformers pooling configuration from HuggingFace.
+
+    ``revision`` is the branch, tag or commit to read (None: default branch).
 
     Returns dict with pooling_mode_cls_token and pooling_mode_mean_tokens flags.
     """
@@ -177,7 +179,7 @@ def _load_pooling_config(model_id: str) -> Dict[str, Any]:
         return {}
 
     try:
-        pool_cfg_path = hf_hub_download(str(model_id), "1_Pooling/config.json")
+        pool_cfg_path = hf_hub_download(str(model_id), "1_Pooling/config.json", revision=revision)
         with open(pool_cfg_path, "r", encoding="utf-8") as pf:
             return json.load(pf)
     except Exception:
@@ -372,6 +374,11 @@ def _parse_validation_args(argv: List[str] | None = None) -> argparse.Namespace:
         help="Hugging Face model id to use as reference (e.g. nomic-ai/nomic-embed-text-v1.5)",
     )
     p.add_argument(
+        "--revision",
+        default=None,
+        help="Branch, tag or commit of the reference model repository (default: its main branch)",
+    )
+    p.add_argument(
         "--texts",
         nargs="*",
         default=[
@@ -437,6 +444,7 @@ def main(argv: List[str] | None = None) -> int:
 
     model_dir = args.model_dir
     reference_model = args.reference_model
+    revision = args.revision
     device = torch.device(args.device)
 
     onnx_path = os.path.join(model_dir, "model.onnx")
@@ -451,13 +459,14 @@ def main(argv: List[str] | None = None) -> int:
         try:
             tokenizer = AutoTokenizer.from_pretrained(
                 reference_model,
+                revision=revision,
                 use_fast=True,
                 trust_remote_code=args.trust_remote_code,
                 fix_mistral_regex=True,
             )
         except TypeError:
             # Older transformers do not accept the kwarg; fall back.
-            tokenizer = AutoTokenizer.from_pretrained(reference_model, use_fast=True, trust_remote_code=args.trust_remote_code)
+            tokenizer = AutoTokenizer.from_pretrained(reference_model, revision=revision, use_fast=True, trust_remote_code=args.trust_remote_code)
     except Exception:
         # Propagate original exception to caller
         raise
@@ -499,13 +508,13 @@ def main(argv: List[str] | None = None) -> int:
 
     print(f"Loading reference PyTorch {reference_kind} model `{reference_model}` (this may download files)...")
     try:
-        ref_model = reference_loader.from_pretrained(reference_model, trust_remote_code=args.trust_remote_code)
+        ref_model = reference_loader.from_pretrained(reference_model, revision=revision, trust_remote_code=args.trust_remote_code)
     except Exception as exc:
         if not prefer_logits:
             raise
         print("Could not load sequence-classification reference model; " f"falling back to base AutoModel: {exc}")
         prefer_logits = False
-        ref_model = AutoModel.from_pretrained(reference_model, trust_remote_code=args.trust_remote_code)
+        ref_model = AutoModel.from_pretrained(reference_model, revision=revision, trust_remote_code=args.trust_remote_code)
     ref_model.to(device)
     ref_model.eval()
 
@@ -542,7 +551,7 @@ def main(argv: List[str] | None = None) -> int:
         # repo indicates CLS-token pooling, prefer that pooling semantics when
         # constructing reference sentence embeddings (some repos expose a pooler
         # but still expect the sentence-transformer pooling behavior).
-        pool_cfg = _load_pooling_config(reference_model)
+        pool_cfg = _load_pooling_config(reference_model, revision)
         prefer_cls_pooling = pool_cfg.get("pooling_mode_cls_token", False)
 
         # Interpret reference outputs
@@ -567,7 +576,7 @@ def main(argv: List[str] | None = None) -> int:
                 attention_mask = attention_mask.cpu().numpy()
             # Try to honor Sentence-Transformers pooling config when available
             ref_sentence_embeddings = None
-            pool_cfg = _load_pooling_config(reference_model)
+            pool_cfg = _load_pooling_config(reference_model, revision)
             if pool_cfg.get("pooling_mode_cls_token", False):
                 ref_sentence_embeddings = ref_token_embeddings[:, 0, :]
             elif pool_cfg.get("pooling_mode_mean_tokens", False):
@@ -930,8 +939,11 @@ def validate_onnx(
     rtol: float = 1e-3,
     trust_remote_code: bool = False,
     normalize_embeddings: bool = False,
+    revision: str | None = None,
 ) -> int:
     """Programmatic wrapper for the CLI `main` function.
+
+    ``revision`` is the branch, tag or commit of ``reference_model`` to load.
 
     Returns the same integer exit code as the CLI: 0=pass, 2=numeric fail, 3=missing model or other failures.
     """
@@ -947,6 +959,8 @@ def validate_onnx(
         "--rtol",
         str(rtol),
     ]
+    if revision:
+        argv += ["--revision", revision]
     if trust_remote_code:
         argv.append("--trust-remote-code")
     if normalize_embeddings:
