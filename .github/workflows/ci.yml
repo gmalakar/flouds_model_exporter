@@ -165,7 +165,22 @@ jobs:
         run: bandit -r src -ll
 
       - name: Known vulnerabilities in installed dependencies
-        run: pip-audit --skip-editable -s osv
+        # transformers 4.57.6 advisories, fixed only in 5.x. optimum-onnx (needed for seq2seq
+        # export) requires transformers<4.58.0, so they are ignored until the exporter moves to
+        # the transformers 5 exporter (see CHANGELOG [Unreleased]). Two affect exporting an
+        # UNTRUSTED repository: PYSEC-2026-2289 (crafted config.json runs code on from_pretrained)
+        # and PYSEC-2026-3929 (crafted tokenizer_config.json writes outside the folder on
+        # save_pretrained). Export only trusted repositories, pinned with --revision. The other
+        # four are in code the exporter does not use (X-CLIP conversion, Trainer, LightGlue,
+        # custom_generate). Remove these ignores with the transformers<4.58.0 cap.
+        run: >-
+          pip-audit --skip-editable -s osv
+          --ignore-vuln PYSEC-2025-217
+          --ignore-vuln PYSEC-2026-2288
+          --ignore-vuln PYSEC-2026-2289
+          --ignore-vuln PYSEC-2026-2290
+          --ignore-vuln PYSEC-2026-3929
+          --ignore-vuln PYSEC-2026-4174
 
   docs-and-cli-sanity:
     runs-on: ubuntu-latest

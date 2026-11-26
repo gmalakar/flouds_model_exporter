@@ -17,6 +17,7 @@ The format is based on Keep a Changelog.
 
 ### Security
 
+- The CI security job's pip-audit ignores six transformers 4.57.6 advisories that are fixed only in transformers 5.x: PYSEC-2025-217, PYSEC-2026-2288, -2289, -2290, -3929 and -4174. Seq2seq export needs optimum-onnx, and every optimum-onnx release (latest 0.1.0) requires `transformers<4.58.0`. The transformers 5 exporter cannot export seq2seq models yet (huggingface/transformers#50254), so the cap stays. Two of the advisories affect exporting an untrusted repository: PYSEC-2026-2289 (a crafted `config.json` runs code when the model loads) and PYSEC-2026-3929 (a crafted `tokenizer_config.json` writes files outside the export folder when the tokenizer is saved). Export only repositories you trust, pinned with `--revision`.
 - bandit B615 (Hugging Face download without a pinned revision) is no longer skipped in the pre-commit hook or the CI security job. Calls that load from a local folder carry `# nosec B615 - local path`.
 
 ## [2.0.2] - 2026-11-26
