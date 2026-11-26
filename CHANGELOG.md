@@ -6,6 +6,8 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [2.0.3] - 2026-11-26
+
 ### Fixed
 
 - `revision` (`--revision`) reaches every Hugging Face Hub download, not only `main_export`: the LLM local preparation (model, snapshot and tokenizer), the `use_cache` and `trust_remote_code` config checks, the fallback exporter's tokenizer, model and config loads, and the numeric validator's reference model, tokenizer and `1_Pooling/config.json`. Before, these read the repository's default branch even when a commit was pinned, so the export could mix two revisions.
