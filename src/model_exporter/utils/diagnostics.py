@@ -29,7 +29,6 @@ def collect_diagnostics(
     tok_out: Dict[str, Any],
     ref_token_embeddings: np.ndarray,
     attention_mask: Any,
-    normalize_flag: bool,
 ) -> str:
     """Write diagnostic arrays and a human-readable summary into
     `model_dir/validation_dumps`.

@@ -9,7 +9,7 @@
 
 This module provides the single public entry-point :func:`export`.
 All private helpers have been split into :mod:`pipeline_helpers`
-(env/cache/token/quantize utilities) and :mod:`pipeline_v2`
+(env/cache/token/quantize utilities) and :mod:`optimum_export`
 (optimum main_export orchestration).
 """
 
@@ -29,6 +29,12 @@ except Exception:
 from model_exporter.config.logging import setup_export_logging, teardown_export_logging
 from model_exporter.errors import ExporterError, ExportFailedError
 from model_exporter.export.helpers import configure_protobuf
+from model_exporter.export.optimum_export import (
+    _run_export_with_fallback,
+    _run_post_optimization_validator,
+    last_export_failure,
+    reset_export_failure,
+)
 from model_exporter.export.options import ExportConfig, resolve_model_for_defaults
 from model_exporter.export.path_utils import safe_remove_export_dir
 from model_exporter.export.pipeline_helpers import (
@@ -38,15 +44,13 @@ from model_exporter.export.pipeline_helpers import (
     _cleanup_memory_caches,
     _is_seq2seq,
     _lift_temp_local_artifacts,
+    _resolve_hub_token,
     _resolve_use_cache,
     _run_numeric_validator,
     _run_quantization_step,
-    _setup_huggingface_hub_token,
     _should_skip_validator,
-    _teardown_huggingface_hub_token,
     _with_export_lock,
 )
-from model_exporter.export.pipeline_v2 import _run_export_with_fallback, _run_post_optimization_validator, last_export_failure, reset_export_failure
 from model_exporter.export.source_ref import validate_model_reference
 from model_exporter.utils.helpers import get_default_opset, get_logger
 from model_exporter.validation.checker import verify_models
@@ -183,8 +187,11 @@ def export(
         use_subprocess: Run the export in an isolated subprocess to protect the
             calling process from memory leaks or native crashes.
             ``None`` lets the pipeline decide based on model size and type.
-        use_fallback_if_failed: Enable legacy fallback exporter only if the
-            primary export path fails.
+        use_fallback_if_failed: Run the fallback strategies when the export
+            fails in-process (each in a child process: other opsets, external
+            data, a local clone with trust_remote_code), and allow the ones that
+            lower precision to fp16. With use_subprocess the strategies always
+            run; the flag then only allows the precision change.
         quantize: Quantization configuration. Pass a quantization config object
             or ``True`` to enable default quantization. ``False`` disables it.
         cleanup: Remove extraneous ONNX files after optimization following
@@ -238,8 +245,7 @@ def export(
     configure_protobuf()
 
     # Normalize Hugging Face token handling
-    token, hub_token_flags = _setup_huggingface_hub_token(huggingface_hub_token, logger)
-    hub_token_flags = hub_token_flags or {}
+    token = _resolve_hub_token(huggingface_hub_token)
 
     opset_version = opset_version or get_default_opset()
 
@@ -264,9 +270,6 @@ def export(
         cwd=_cwd,
     )
     _output_parent = str(Path(_output_dir).parent)
-
-    # BASE_DIR is still used for the logging helper (log path inside package src)
-    BASE_DIR: str = os.path.dirname(os.path.abspath(__file__))
 
     Path(_output_dir).mkdir(parents=True, exist_ok=True)
 
@@ -294,7 +297,7 @@ def export(
         rev_tag = "local"
 
     try:
-        file_handler, logfile_fd, old_stdout, old_stderr, logfile_path = setup_export_logging(BASE_DIR, safe_model, rev_tag, logger, log_to_file)
+        file_handler, logfile_fd, old_stdout, old_stderr, logfile_path = setup_export_logging(safe_model, rev_tag, logger, log_to_file)
     except Exception:
         logger.warning("Failed to initialize per-run logging; continuing without file capture")
 
@@ -476,7 +479,6 @@ def export(
             logger.debug("Quick structural verification passed=%s", quick_ok)
 
             # Numeric validator
-            validator_rc: int = 0
             if not skip_validator:
                 if _should_skip_validator(_model_for, pack_single_file, expected):
                     if _is_seq2seq(_model_for) and not pack_single_file:
@@ -492,12 +494,9 @@ def export(
                         )
                 else:
                     try:
-                        validator_rc, _ = _run_numeric_validator(
+                        _run_numeric_validator(
                             output_dir=_output_dir,
-                            expected=expected,
                             model_name=model_name,
-                            pack_single_file=pack_single_file,
-                            pack_single_threshold_mb=pack_single_threshold_mb,
                             trust_remote_code=trust_remote_code,
                             used_trust_remote=used_trust_remote,
                             normalize_embeddings=normalize_embeddings,
@@ -615,10 +614,6 @@ def export(
                 teardown_export_logging(file_handler, logfile_fd, old_stdout, old_stderr, logger)
             except Exception:
                 pass
-        try:
-            _teardown_huggingface_hub_token(hub_token_flags, logger)
-        except Exception:
-            pass
 
 
 if __name__ == "__main__":

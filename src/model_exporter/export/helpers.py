@@ -374,7 +374,7 @@ def cleanup_extraneous_onnx_files(
         # are handled separately. This prevents a merged/optimized artifact
         # for one base (e.g., decoder) from causing the removal of unrelated
         # artifacts (e.g., encoder files).
-        def _pick_for_base(base_key: str, base_list: list[str]) -> set[str]:
+        def _pick_for_base(base_list: list[str]) -> set[str]:
             bl_lower = [f.lower() for f in base_list]
             if any("merged_optimized" in f for f in bl_lower):
                 return {f for f in base_list if "merged_optimized" in f.lower()}
@@ -408,7 +408,7 @@ def cleanup_extraneous_onnx_files(
         keep_set = set()
         try:
             for base in ("decoder_model", "encoder_model", "model"):
-                picked = _pick_for_base(base, base_groups.get(base, []))
+                picked = _pick_for_base(base_groups.get(base, []))
                 if picked:
                     safe_log(
                         logger_arg,

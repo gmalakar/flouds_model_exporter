@@ -19,10 +19,10 @@ Enable the following settings:
 
 Mark these checks as required. For matrix jobs, use the exact check names GitHub shows for each Python version.
 
-- `lint` for Python 3.11 and 3.12
-- `tests` for Python 3.11 and 3.12
-- `type-check` for Python 3.11 and 3.12
-- `packaging-sanity` for Python 3.11 and 3.12
+- `lint` for Python 3.11, 3.12, 3.13 and 3.14
+- `tests` for Python 3.11, 3.12, 3.13 and 3.14
+- `type-check` for Python 3.11, 3.12, 3.13 and 3.14
+- `packaging-sanity` for Python 3.11, 3.12, 3.13 and 3.14
 - `docs-and-cli-sanity`
 
 ## Merge Strategy

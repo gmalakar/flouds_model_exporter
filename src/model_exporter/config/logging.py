@@ -67,7 +67,6 @@ class Tee:
 
 
 def setup_export_logging(
-    base_dir: str,
     safe_model: str,
     rev_tag: str,
     logger: logging.Logger,
@@ -90,7 +89,6 @@ def setup_export_logging(
     logfile = None
 
     if log_to_file:
-        del base_dir
         configured_log_dir = os.getenv("LOG_DIR")
         if configured_log_dir:
             logs_dir = Path(configured_log_dir).expanduser()

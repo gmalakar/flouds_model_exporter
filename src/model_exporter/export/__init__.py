@@ -25,7 +25,6 @@ __all__ = [
     "subprocess_runner",
     "helpers",
     "optimizer",
-    "legacy_fallback",
     "options",
     "path_utils",
 ]

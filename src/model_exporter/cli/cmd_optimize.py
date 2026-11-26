@@ -47,7 +47,7 @@ def _add_optimize_arguments(parser):
     )
 
 
-def _run_optimize(args, parser):
+def _run_optimize(args):
     """Load the optimizer module and run encoder-model ONNX optimization.
 
     Sets up a logger, then calls :func:`optimize_if_encoder` with the
@@ -55,8 +55,6 @@ def _run_optimize(args, parser):
 
     Args:
         args: Parsed :class:`argparse.Namespace` from the optimize sub-command.
-        parser: The :class:`argparse.ArgumentParser` (unused; kept for API
-            symmetry with other sub-command runners).
 
     Returns:
         An integer exit code (``0`` = success, non-zero = failure).

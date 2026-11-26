@@ -401,7 +401,7 @@ def _should_skip_validator(model_for: str, pack_single_file: bool, expected: Lis
     return False
 
 
-def _setup_huggingface_hub_token(token: str | None, logger: Any) -> tuple[str | None, dict]:
+def _resolve_hub_token(token: str | None) -> str | None:
     """Return the Hugging Face token to use for this export.
 
     The token given by the caller wins; otherwise ``HUGGINGFACE_HUB_TOKEN`` or
@@ -409,18 +409,8 @@ def _setup_huggingface_hub_token(token: str | None, logger: Any) -> tuple[str | 
     an argument. It is not written to the environment and no login is performed: a
     login saves the token on disk as the machine's default credential, which would
     make one caller's token the credential for every later export.
-
-    Returns ``(token, flags)``. ``flags`` is kept for callers of the previous version
-    and always reports that nothing was changed.
     """
-    del logger
-    resolved = token or os.environ.get("HUGGINGFACE_HUB_TOKEN") or os.environ.get("HF_TOKEN") or None
-    return resolved, {"set_hub": False, "login_ok": False}
-
-
-def _teardown_huggingface_hub_token(flags: dict, logger: Any) -> None:
-    """Nothing to undo: the export no longer changes the environment or logs in."""
-    del flags, logger
+    return token or os.environ.get("HUGGINGFACE_HUB_TOKEN") or os.environ.get("HF_TOKEN") or None
 
 
 def _setup_tokenizer_pad_token(output_dir: str, trust_remote_code: bool, logger: Any) -> None:
@@ -478,16 +468,13 @@ def _setup_tokenizer_pad_token(output_dir: str, trust_remote_code: bool, logger:
 
 def _run_numeric_validator(
     output_dir: str,
-    expected: List[str],
     model_name: str,
-    pack_single_file: bool,
-    pack_single_threshold_mb: int | None,
     trust_remote_code: bool,
     used_trust_remote: bool,
     normalize_embeddings: bool,
     logger: Any,
     require_validator: bool,
-) -> tuple[int, bool]:
+) -> None:
     """Run numeric validator with all setup and result handling."""
     try:
         cleanup_validator_logging_handlers()
@@ -502,12 +489,9 @@ def _run_numeric_validator(
         used_trust_remote,
     )
 
-    validator_rc, _ = invoke_validator(
+    validator_rc = invoke_validator(
         output_dir=output_dir,
-        expected=expected,
         model_name=model_name,
-        pack_single_file=pack_single_file,
-        pack_single_threshold_mb=pack_single_threshold_mb,
         trust_remote_code=trust_remote_code or used_trust_remote,
         normalize_embeddings=normalize_embeddings,
         logger=logger,
@@ -529,8 +513,6 @@ def _run_numeric_validator(
 
     if require_validator and validator_rc != 0:
         raise ExportValidationError(output_dir, validator_rc)
-
-    return validator_rc, False
 
 
 def _check_optimized_artifacts(output_dir: str) -> bool:

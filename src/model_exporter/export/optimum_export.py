@@ -1,13 +1,13 @@
 # =============================================================================
-# File: pipeline_v2.py
+# File: optimum_export.py
 # Date: 2026-04-17
 # Copyright (c) 2026 Goutam Malakar.
 # SPDX-License-Identifier: Apache-2.0
 # =============================================================================
-"""V2 ONNX export implementation: optimum main_export orchestration,
-fallback strategies, and post-optimization validation.
+"""ONNX export through optimum's main_export: the engine behind :func:`pipeline.export`.
 
-Extracted from pipeline.py to reduce file length.
+Runs the export in-process or in a child process, retries through the fallback
+strategies, and runs the post-optimization validation.
 """
 from __future__ import annotations
 
@@ -22,7 +22,6 @@ from typing import Any, Callable, List, Optional
 
 from model_exporter.errors import RemoteCodeNotAllowedError
 from model_exporter.export.helpers import cleanup_temporary_export_artifacts
-from model_exporter.export.legacy_fallback import run_legacy_v1_fallback
 from model_exporter.export.path_utils import STALE_TEMP_SECONDS, safe_replace_export_dir
 from model_exporter.export.pipeline_helpers import _remove_validation_marker, _write_validation_marker
 from model_exporter.export.source_ref import copy_or_clone
@@ -180,11 +179,7 @@ def export_onnx_fallback(me_kwargs: dict[str, Any]) -> None:
     trust_remote_code = bool(me_kwargs.get("trust_remote_code", False))
 
     # Optional parameters that may or may not exist
-    token = (
-        me_kwargs.get("use_auth_token")
-        if isinstance(me_kwargs.get("use_auth_token"), str)
-        else me_kwargs.get("token") if isinstance(me_kwargs.get("token"), str) else None
-    )
+    token = me_kwargs.get("token") if isinstance(me_kwargs.get("token"), str) else None
 
     # Additional optional parameters to pass through if supported
     # (These will be filtered dynamically later)
@@ -276,7 +271,6 @@ def export_onnx_fallback(me_kwargs: dict[str, Any]) -> None:
 
 def _prepare_strategy(
     base_kwargs: dict,
-    fb_name: str,
     fb_kwargs: dict,
     export_source: str,
     logger: Any,
@@ -542,48 +536,25 @@ def _build_fallback_strategies(err: str, trust_remote_code: bool) -> list[tuple[
         fb_opset = 14 if "scaled_dot_product_attention" in err else 11
         fallbacks.append((f"opset_{fb_opset}", {"opset": fb_opset}))
 
-    # 3. Post-processing failures -> skip post-process & reduce memory
+    # 3. Post-processing failures -> skip post-processing, weights as external data
     if has_error(
         "post-processing of the onnx export failed",
         "remove_duplicate_weights_from_tied_info",
         "numpy_helper.to_array",
         "deduplicate_gather_matmul",
     ):
-        fallbacks.append(
-            (
-                "no_post_process_reduce",
-                {
-                    "no_post_process": True,
-                    "dtype": "float16",
-                    "use_external_data_format": True,
-                },
-            )
-        )
+        fallbacks.append(("no_post_process_external", {"no_post_process": True, "use_external_data_format": True}))
 
-    # 4. Memory errors -> lower precision AND reduce batch size
+    # 4. Memory errors -> half precision. optimum accepts "fp32", "fp16" and "bf16" and
+    # silently ignores anything else. This changes the model, so it only runs with
+    # use_fallback_if_failed (see _execute_fallback_loop).
     if has_error("memoryerror", "out of memory", "memory error", "not enough memory", "alloc_cpu"):
-        fallbacks.append(
-            (
-                "dtype_float16_batch1",
-                {
-                    "dtype": "float16",
-                    "use_external_data_format": True,
-                },
-            )
-        )
+        fallbacks.append(("dtype_fp16_external", {"dtype": "fp16", "use_external_data_format": True}))
 
-    # 5. Conservative combined fallback
+    # 5. Generic full-precision opset retries, unless an opset strategy was already chosen
     if not any(name.startswith("opset_") for name, _ in fallbacks):
-        fallbacks.append(
-            (
-                "final_opset11_float16_noext",
-                {
-                    "opset": 11,
-                    "dtype": "float16",
-                    "use_external_data_format": True,
-                },
-            )
-        )
+        fallbacks.append(("opset_14", {"opset": 14}))
+        fallbacks.append(("opset_11_external", {"opset": 11, "use_external_data_format": True}))
 
     # 6. Local/clone strategies
     if trust_remote_code:
@@ -631,6 +602,10 @@ def _attempt_inprocess_export(
                 with _contextlib.redirect_stderr(buf_err):
                     try:
                         from optimum.exporters.onnx import main_export as _main_export
+
+                        from model_exporter.export.optimum_compat import patch_partial_config_attributes
+
+                        patch_partial_config_attributes()
                     except ImportError as import_err:
                         captured_exception = import_err
                         _main_export = None
@@ -894,7 +869,7 @@ def _execute_fallback_loop(
                 fb_kwargs,
             )
 
-            me_try, cleanup, prep_err = _prepare_strategy(me_kwargs, fb_name, fb_kwargs, export_source, logger)
+            me_try, cleanup, prep_err = _prepare_strategy(me_kwargs, fb_kwargs, export_source, logger)
             if me_try is None:
                 safe_log(logger, "info", "Skipping fallback '%s': %s", fb_name, prep_err)
                 continue
@@ -949,15 +924,21 @@ def export_v2_main_export(
     trust_remote_code: bool,
     logger: Any,
     auth_token: Optional[str] = None,
-    use_auth_token: Optional[bool] = None,
     use_external_data_format: bool = False,
     no_post_process: bool = False,
     merge: bool = False,
     use_subprocess: bool = False,
     allow_precision_fallback: bool = False,
     revision: Optional[str] = None,
+    retry_after_inprocess_failure: bool = False,
 ) -> tuple[bool, bool]:
     """Run optimum.exporters.onnx.main_export with sensible retries.
+
+    The export runs in-process first. With *use_subprocess* a failure is retried in a
+    child process and then through the fallback strategies (``_execute_fallback_loop``).
+    Without it, the fallback strategies run only when *retry_after_inprocess_failure* is
+    set; each strategy runs in a child process. *allow_precision_fallback* permits the
+    strategies that change numeric precision.
 
     Returns (success: bool, used_trust_remote_code: bool).
     """
@@ -1029,8 +1010,6 @@ def export_v2_main_export(
     # environment or saved by a login, so it lasts exactly as long as this call.
     if auth_token:
         me_kwargs["token"] = auth_token
-    elif use_auth_token:
-        me_kwargs["token"] = True
 
     safe_log(
         logger,
@@ -1058,28 +1037,21 @@ def export_v2_main_export(
             if ok:
                 child_tmp = _cleanup_child_tmp(child_tmp, logger)
                 return True, bool(trust_remote_code)
-            else:
-                safe_log(
-                    logger,
-                    "error",
-                    "In-process export failed for %s (subprocess fallback disabled). Error: %s",
-                    export_source,
-                    stderr[:500] if stderr else "<no error details captured>",
-                )
-            child_tmp = _cleanup_child_tmp(child_tmp, logger)
-            return False, False
-
-        if not ok:
-            if use_subprocess:
-                ok, stderr = _run_main_export_subprocess(me_kwargs, logger)
-                if not ok:
-                    _note_failure(stderr)
-            else:
-                safe_log(
-                    logger,
-                    "info",
-                    "Subprocess fallback not allowed; skipping subprocess run",
-                )
+            safe_log(
+                logger,
+                "error",
+                "In-process export failed for %s. Error: %s",
+                export_source,
+                stderr[:500] if stderr else "<no error details captured>",
+            )
+            if not retry_after_inprocess_failure:
+                safe_log(logger, "info", "Fallback strategies disabled; set use_fallback_if_failed to retry")
+                child_tmp = _cleanup_child_tmp(child_tmp, logger)
+                return False, False
+        elif not ok:
+            ok, stderr = _run_main_export_subprocess(me_kwargs, logger)
+            if not ok:
+                _note_failure(stderr)
         if ok:
             _move_working_to_output(working_output, output_dir, logger)
             safe_log(logger, "info", "v2 main_export saved artifacts to %s", output_dir)
@@ -1165,12 +1137,9 @@ def _run_post_optimization_validator(
         return 1
 
     try:
-        post_rc, _ = invoke_validator(
+        post_rc = invoke_validator(
             output_dir=output_dir,
-            expected=expected,
             model_name=model_name,
-            pack_single_file=pack_single_file,
-            pack_single_threshold_mb=pack_single_threshold_mb,
             trust_remote_code=trust_remote_code or used_trust_remote,
             normalize_embeddings=normalize_embeddings,
             logger=logger,
@@ -1213,7 +1182,10 @@ def _run_export_with_fallback(
     auth_token: str | None = None,
     revision: str | None = None,
 ) -> tuple[bool, bool]:
-    """Try v2 export with opset retry and trust_remote_code fallback.
+    """Export with the v2 pipeline and its fallback strategies.
+
+    *use_fallback_if_failed* lets the fallback strategies run after an in-process
+    failure and permits the ones that change numeric precision.
 
     Returns a tuple (export_succeeded, used_trust_remote).
     """
@@ -1262,6 +1234,7 @@ def _run_export_with_fallback(
             auth_token=auth_token,
             allow_precision_fallback=use_fallback_if_failed,
             revision=revision,
+            retry_after_inprocess_failure=use_fallback_if_failed,
         )
         if v2_ok:
             export_succeeded = True
@@ -1272,39 +1245,6 @@ def _run_export_with_fallback(
             logger.info("v2 main_export did not succeed")
     except Exception as import_err:
         logger.warning("v2 exporter wrapper failed to import or execute: %s", import_err)
-
-    # Final compatibility fallback: legacy v1-style exporter path.
-    if not export_succeeded and use_fallback_if_failed:
-        try:
-            logger.info("Attempting legacy fallback exporter after v2 failures")
-            legacy_ok, legacy_used_trust = run_legacy_v1_fallback(
-                export_source,
-                output_dir,
-                model_for,
-                opset_version,
-                device,
-                task,
-                framework,
-                library,
-                logger,
-                trust_remote_code,
-                use_external_data_format=use_external_data_format,
-                no_post_process=no_post_process,
-                merge=merge,
-                use_subprocess=use_subprocess,
-                token=auth_token,
-            )
-            if legacy_ok:
-                export_succeeded = True
-                logger.info("Legacy fallback exporter succeeded")
-            if legacy_used_trust:
-                used_trust_remote = True
-            if not legacy_ok:
-                logger.info("Legacy fallback exporter did not succeed")
-        except Exception as legacy_err:
-            logger.warning("Legacy fallback exporter failed to execute: %s", legacy_err)
-    elif not export_succeeded:
-        logger.info("Legacy fallback exporter disabled by --use-fallback-if-failed")
 
     # After successful export, run ONNX sanitizer to deduplicate tied initializers
     try:

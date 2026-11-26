@@ -16,6 +16,7 @@ import shutil as _shutil
 import subprocess
 import sys
 import tempfile as _tempfile
+from pathlib import Path
 
 # time not needed at module level here
 from typing import Any
@@ -41,6 +42,8 @@ def _run_main_export_subprocess(me_kwargs: dict, logger: Any) -> tuple[bool, str
         runner_fh = _tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".py", encoding="utf-8")
         runner_code = """import json,sys
 from optimum.exporters.onnx import main_export
+from model_exporter.export.optimum_compat import patch_partial_config_attributes
+patch_partial_config_attributes()
 
 def _norm(d):
     # Rename the few keys whose names differ between exporter versions. Values arrive
@@ -73,6 +76,10 @@ main_export(**kwargs)
         env["MKL_NUM_THREADS"] = env.get("MKL_NUM_THREADS", "1")
         env["OPENBLAS_NUM_THREADS"] = env.get("OPENBLAS_NUM_THREADS", "1")
         env["NUMEXPR_NUM_THREADS"] = env.get("NUMEXPR_NUM_THREADS", "1")
+        # The child imports model_exporter (the Python 3.14 optimum fix), also when the
+        # package runs from a source checkout rather than an installed copy.
+        package_parent = str(Path(__file__).resolve().parents[2])
+        env["PYTHONPATH"] = os.pathsep.join(p for p in (package_parent, env.get("PYTHONPATH", "")) if p)
 
         out_dir = None
         if isinstance(me_kwargs, dict):

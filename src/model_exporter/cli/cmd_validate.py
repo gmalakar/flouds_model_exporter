@@ -72,7 +72,7 @@ def _add_validate_arguments(parser):
     )
 
 
-def _run_validate(args, parser):
+def _run_validate(args):
     """Translate parsed *args* into a validate argv list and invoke the validator.
 
     Dynamically imports :mod:`model_exporter.validation.numeric` to
@@ -81,8 +81,6 @@ def _run_validate(args, parser):
 
     Args:
         args: Parsed :class:`argparse.Namespace` from the validate sub-command.
-        parser: The :class:`argparse.ArgumentParser` (unused; kept for API
-            symmetry with other sub-command runners).
 
     Returns:
         An integer exit code (``0`` = pass, ``2`` = fail, ``3`` = error).

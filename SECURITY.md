@@ -13,6 +13,8 @@ This project is in active development. Security fixes are applied to the latest 
 | --- | --- |
 | Python 3.11 | Supported |
 | Python 3.12 | Supported |
+| Python 3.13 | Supported |
+| Python 3.14 | Supported |
 | Other Python versions | Not supported |
 
 ## Reporting a vulnerability

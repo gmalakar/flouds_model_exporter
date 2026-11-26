@@ -14,6 +14,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
+import pytest
+
 
 def import_pipeline_module(monkeypatch) -> Any:
     fake_config_logging = cast(Any, types.ModuleType("model_exporter.config.logging"))
@@ -135,20 +137,8 @@ def test_run_main_export_subprocess_returns_success_and_stderr(monkeypatch, tmp_
     assert run_calls["cmd"][0] == sys.executable
 
 
-def test_run_export_with_fallback_uses_legacy_after_v2_failure(monkeypatch, tmp_path):
-    from model_exporter.export import pipeline_v2
-
-    called: dict[str, bool] = {"legacy": False}
-
-    monkeypatch.setattr(pipeline_v2, "export_v2_main_export", lambda *args, **kwargs: (False, False))
-
-    def _fake_legacy(*args, **kwargs):
-        called["legacy"] = True
-        return True, True
-
-    monkeypatch.setattr(pipeline_v2, "run_legacy_v1_fallback", _fake_legacy)
-
-    ok, used_trust = pipeline_v2._run_export_with_fallback(
+def _run_with_fallback(optimum_export, tmp_path, use_fallback_if_failed):
+    return optimum_export._run_export_with_fallback(
         export_source="some/model",
         output_dir=str(tmp_path),
         model_for="llm",
@@ -157,54 +147,89 @@ def test_run_export_with_fallback_uses_legacy_after_v2_failure(monkeypatch, tmp_
         task="feature-extraction",
         framework="pt",
         library=None,
-        logger=logging.getLogger("test-legacy-fallback"),
+        logger=logging.getLogger("test-fallback-flag"),
         trust_remote_code=False,
-        use_external_data_format=False,
-        no_post_process=False,
-        merge=False,
         use_subprocess=False,
-        use_fallback_if_failed=True,
+        use_fallback_if_failed=use_fallback_if_failed,
+        revision="abc123",
     )
 
-    assert called["legacy"] is True
-    assert ok is True
-    assert used_trust is True
+
+@pytest.mark.parametrize("flag", [True, False])
+def test_run_export_with_fallback_passes_the_flag_to_v2(monkeypatch, tmp_path, flag):
+    from model_exporter.export import optimum_export
+
+    seen: dict[str, Any] = {}
+
+    def _fake_v2(*args, **kwargs):
+        seen.update(kwargs)
+        return False, False
+
+    monkeypatch.setattr(optimum_export, "export_v2_main_export", _fake_v2)
+    assert _run_with_fallback(optimum_export, tmp_path, flag) == (False, False)
+    assert seen["retry_after_inprocess_failure"] is flag
+    assert seen["allow_precision_fallback"] is flag
+    assert seen["revision"] == "abc123"
 
 
-def test_run_export_with_fallback_skips_legacy_when_flag_disabled(monkeypatch, tmp_path):
-    from model_exporter.export import pipeline_v2
+def _v2_after_inprocess_failure(monkeypatch, tmp_path, retry):
+    from model_exporter.export import optimum_export
 
-    called: dict[str, bool] = {"legacy": False}
+    loop_calls: list[dict[str, Any]] = []
 
-    monkeypatch.setattr(pipeline_v2, "export_v2_main_export", lambda *args, **kwargs: (False, False))
+    def _fake_loop(me_kwargs, stderr, *args, **kwargs):
+        loop_calls.append(dict(me_kwargs))
+        return True, False
 
-    def _fake_legacy(*args, **kwargs):
-        called["legacy"] = True
-        return True, True
-
-    monkeypatch.setattr(pipeline_v2, "run_legacy_v1_fallback", _fake_legacy)
-
-    ok, used_trust = pipeline_v2._run_export_with_fallback(
-        export_source="some/model",
-        output_dir=str(tmp_path),
-        model_for="llm",
-        opset_version=17,
-        device="cpu",
-        task="feature-extraction",
-        framework="pt",
-        library=None,
-        logger=logging.getLogger("test-legacy-fallback-disabled"),
-        trust_remote_code=False,
-        use_external_data_format=False,
-        no_post_process=False,
-        merge=False,
-        use_subprocess=False,
-        use_fallback_if_failed=False,
+    monkeypatch.setattr(optimum_export, "_attempt_inprocess_export", lambda me, wo, od, ct, lg: (False, "boom", None))
+    monkeypatch.setattr(optimum_export, "_execute_fallback_loop", _fake_loop)
+    monkeypatch.setattr(optimum_export, "cleanup_temporary_export_artifacts", lambda **kw: None)
+    result = optimum_export.export_v2_main_export(
+        "org/model",
+        str(tmp_path),
+        "fe",
+        17,
+        "cpu",
+        "feature-extraction",
+        "pt",
+        "transformers",
+        False,
+        logging.getLogger("test-inprocess-retry"),
+        revision="abc123",
+        retry_after_inprocess_failure=retry,
     )
+    return result, loop_calls
 
-    assert called["legacy"] is False
-    assert ok is False
-    assert used_trust is False
+
+def test_inprocess_failure_runs_fallback_strategies_when_allowed(monkeypatch, tmp_path):
+    result, loop_calls = _v2_after_inprocess_failure(monkeypatch, tmp_path, retry=True)
+    assert result == (True, False)
+    assert len(loop_calls) == 1 and loop_calls[0].get("revision") == "abc123"
+
+
+def test_inprocess_failure_does_not_retry_by_default(monkeypatch, tmp_path):
+    result, loop_calls = _v2_after_inprocess_failure(monkeypatch, tmp_path, retry=False)
+    assert result == (False, False)
+    assert loop_calls == []
+
+
+def test_fallback_strategies_use_optimum_dtype_values_and_full_precision_opset_retries():
+    from model_exporter.export import optimum_export
+
+    generic = dict(optimum_export._build_fallback_strategies("something unexpected", False))
+    assert generic == {"opset_14": {"opset": 14}, "opset_11_external": {"opset": 11, "use_external_data_format": True}}
+
+    post = dict(optimum_export._build_fallback_strategies("post-processing of the onnx export failed", False))
+    assert post["no_post_process_external"] == {"no_post_process": True, "use_external_data_format": True}
+
+    memory = dict(optimum_export._build_fallback_strategies("out of memory", False))
+    assert memory["dtype_fp16_external"]["dtype"] == "fp16"
+    dtypes = {
+        kw["dtype"]
+        for name, kw in optimum_export._build_fallback_strategies("out of memory post-processing of the onnx export failed", True)
+        if "dtype" in kw
+    }
+    assert dtypes <= {"fp32", "fp16", "bf16"}, "optimum ignores any other dtype value"
 
 
 def test_auto_resolve_trust_remote_code_does_not_auto_enable(monkeypatch):
@@ -241,13 +266,9 @@ def test_hub_token_is_returned_without_login_or_environment_change(monkeypatch):
     _hub_that_must_not_be_logged_into(monkeypatch)
     monkeypatch.delenv("HUGGINGFACE_HUB_TOKEN", raising=False)
     monkeypatch.delenv("HF_TOKEN", raising=False)
-    logger = SimpleNamespace(info=lambda *args, **kwargs: None, debug=lambda *args, **kwargs: None)
-
-    token, flags = pipeline_helpers._setup_huggingface_hub_token("hf_test", logger)
-    pipeline_helpers._teardown_huggingface_hub_token(flags, logger)
+    token = pipeline_helpers._resolve_hub_token("hf_test")
 
     assert token == "hf_test"
-    assert flags == {"set_hub": False, "login_ok": False}
     assert "HUGGINGFACE_HUB_TOKEN" not in os.environ
     assert "HF_TOKEN" not in os.environ
 
@@ -256,49 +277,14 @@ def test_hub_token_falls_back_to_the_environment(monkeypatch):
     from model_exporter.export import pipeline_helpers
 
     _hub_that_must_not_be_logged_into(monkeypatch)
-    logger = SimpleNamespace(warning=lambda *args, **kwargs: None, debug=lambda *args, **kwargs: None)
-
     monkeypatch.setenv("HUGGINGFACE_HUB_TOKEN", "hf_env")
     monkeypatch.setenv("HF_TOKEN", "hf_other")
-    token, flags = pipeline_helpers._setup_huggingface_hub_token(None, logger)
-    pipeline_helpers._teardown_huggingface_hub_token(flags, logger)
-    assert token == "hf_env"
+    assert pipeline_helpers._resolve_hub_token(None) == "hf_env"
     assert os.environ["HUGGINGFACE_HUB_TOKEN"] == "hf_env"
 
     monkeypatch.delenv("HUGGINGFACE_HUB_TOKEN")
-    assert pipeline_helpers._setup_huggingface_hub_token(None, logger)[0] == "hf_other"
-    assert pipeline_helpers._setup_huggingface_hub_token("hf_given", logger)[0] == "hf_given"
-
-
-def test_legacy_fallback_does_not_force_trust_remote_code(monkeypatch, tmp_path):
-    from model_exporter.export import legacy_fallback
-
-    attempts: list[dict[str, Any]] = []
-
-    def _fake_export(kwargs):
-        attempts.append(dict(kwargs))
-        return False, "failed"
-
-    monkeypatch.setattr(legacy_fallback, "_run_inprocess_main_export", _fake_export)
-    monkeypatch.setattr(legacy_fallback, "_prepare_clone_source", lambda *args: (None, "offline"))
-
-    ok, used_trust = legacy_fallback.run_legacy_v1_fallback(
-        export_source="some/model",
-        output_dir=str(tmp_path),
-        model_for="llm",
-        opset_version=17,
-        device="cpu",
-        task="feature-extraction",
-        framework="pt",
-        library=None,
-        logger=logging.getLogger("test-legacy-trust"),
-        trust_remote_code=False,
-    )
-
-    assert ok is False
-    assert used_trust is False
-    assert attempts
-    assert all("trust_remote_code" not in attempt for attempt in attempts)
+    assert pipeline_helpers._resolve_hub_token(None) == "hf_other"
+    assert pipeline_helpers._resolve_hub_token("hf_given") == "hf_given"
 
 
 def test_export_from_config_forwards_normalized_kwargs(monkeypatch):

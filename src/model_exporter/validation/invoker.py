@@ -7,48 +7,34 @@
 # =============================================================================
 """Validator invocation helper used by the exporter.
 
-Provides `invoke_validator(...)` which performs the quick structural
-verification (checker/external_data/session) and numeric validation by
-invoking the centralized validator programmatically or, if necessary,
-via an in-process module run as a fallback. Returns `(rc, quick_ok)` where
-`rc` is the numeric validator return code (0 success, 2 numeric fail,
-3 missing model/error) and `quick_ok` indicates whether the lightweight
-quick verification passed.
+Provides `invoke_validator(...)`, which runs the numeric validation by calling
+the centralized validator programmatically or, if necessary, through an in-process
+module run. Returns the validator's return code (0 success, 2 numeric fail,
+3 missing model/error).
 """
 from __future__ import annotations
 
 import importlib
 import runpy
 import sys
-from typing import Any, List, Tuple
+from typing import Any
 
 
 def invoke_validator(
     output_dir: str,
-    expected: List[str],
     model_name: str | None,
-    pack_single_file: bool,
-    pack_single_threshold_mb: int | None,
     trust_remote_code: bool,
     normalize_embeddings: bool,
     logger: Any,
-) -> Tuple[int, bool]:
+) -> int:
     """Invoke the numeric ONNX validator for a completed export.
 
     Tries programmatic validation via :func:`validate_onnx` first; falls back
-    to subprocess-based invocation if the validator module is unavailable or
-    returns a non-zero code. Performs a quick structural check of expected
-    artifact files before returning.
+    to an in-process module run if the validator module is unavailable or
+    returns a non-zero code.
 
     Args:
         output_dir: Directory containing the exported ONNX model.
-        expected: List of expected artifact filenames (used for quick check).
-        model_name: Hugging Face model id used as the numeric reference; falls
-            back to *output_dir* when ``None``.
-        pack_single_file: Whether the export packed all weights into a single
-            file (affects the quick check heuristic).
-        pack_single_threshold_mb: Size threshold used during packing; passed
-            for informational logging only.
         trust_remote_code: Forward to the validator for models requiring custom
             remote execution code.
         normalize_embeddings: Forward to the validator to request L2-normalized
@@ -57,12 +43,9 @@ def invoke_validator(
             diagnostic output.
 
     Returns:
-        A 2-tuple ``(rc, quick_ok)`` where *rc* is the validator exit code
-        (``0`` = pass, ``2`` = fail, ``3`` = error/unavailable) and *quick_ok*
-        is a ``bool`` from the structural artifact check.
+        The validator exit code (``0`` = pass, ``2`` = fail, ``3`` = error/unavailable).
     """
     rc = 3
-    quick_ok = True
 
     # Try to load the validator module programmatically first.
     validator: Any = None
@@ -153,4 +136,4 @@ def invoke_validator(
         logger.error("Failed to execute validator for %s: %s", output_dir, e)
         rc = 3
 
-    return int(rc), bool(quick_ok)
+    return int(rc)

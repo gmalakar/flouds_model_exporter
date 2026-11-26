@@ -41,28 +41,38 @@ class RemoteCodeNotAllowedError(ExporterError):
 class ExportInProgressError(ExporterError):
     """Another process is already exporting to the same output directory."""
 
-    def __init__(self, output_dir: str, pid: int | None = None) -> None:
+    def __init__(self, output_dir: str, pid: int | None = None) -> None:  # noqa: B042 - __reduce__ keeps pickle/copy right
         self.output_dir = output_dir
         self.pid = pid
         owner = f" (pid {pid})" if pid is not None else ""
         super().__init__(f"An export to {output_dir} is already running{owner}.")
 
+    def __reduce__(self) -> tuple[type, tuple[str, int | None]]:
+        # Rebuild from the constructor arguments, not from the formatted message.
+        return (type(self), (self.output_dir, self.pid))
+
 
 class ExportFailedError(ExporterError, RuntimeError):
     """Every export attempt failed. ``detail`` holds the last error reported."""
 
-    def __init__(self, model_name: str, detail: str = "") -> None:
+    def __init__(self, model_name: str, detail: str = "") -> None:  # noqa: B042 - __reduce__ keeps pickle/copy right
         self.model_name = model_name
         self.detail = detail
         lines = [line.strip() for line in (detail or "").splitlines() if line.strip()]
         reason = f": {lines[-1][:500]}" if lines else ""
         super().__init__(f"All export attempts failed for model {model_name}{reason}")
 
+    def __reduce__(self) -> tuple[type, tuple[str, str]]:
+        return (type(self), (self.model_name, self.detail))
+
 
 class ExportValidationError(ExporterError):
     """The exported model failed numeric validation and ``require_validator`` was set."""
 
-    def __init__(self, output_dir: str, returncode: int) -> None:
+    def __init__(self, output_dir: str, returncode: int) -> None:  # noqa: B042 - __reduce__ keeps pickle/copy right
         self.output_dir = output_dir
         self.returncode = returncode
         super().__init__(f"Validation of the export in {output_dir} failed (validator code {returncode}).")
+
+    def __reduce__(self) -> tuple[type, tuple[str, int]]:
+        return (type(self), (self.output_dir, self.returncode))

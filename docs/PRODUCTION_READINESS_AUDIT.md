@@ -23,17 +23,19 @@ and could end the calling process.
 | 11 | Medium | No test ran a real export; CI had no security scan | Fixed; integration tests and CI jobs added |
 | 12 | Medium | No way to pin the model revision | Partly fixed; `revision` option added, see below |
 | 13 | High | Errors swallowed: about 350 `except Exception` handlers | Open |
-| 14 | Medium | Two pipelines and a legacy fallback coexist; two `helpers.py` | Open |
+| 14 | Medium | Two pipelines and a legacy fallback coexist; two `helpers.py` | Partly fixed 2026-11-26: legacy fallback removed (its retries are v2 strategies); `pipeline_v2.py` is the engine behind `pipeline.py`; two `helpers.py` remain |
 | 15 | Medium | Unit coverage about 30%; core modules under 20% | Open |
 | 16 | Low | `export()` takes over 30 parameters | Open |
 
 ## Verified
 
-- 133 unit tests, flake8, black, isort and mypy pass.
+- 143 unit tests, flake8, black, isort, mypy and bandit pass.
 - 4 integration tests pass: real export in-process and through the subprocess path, reuse of an
   existing export, and a missing model failing with a reason.
-- The same unit and integration tests pass on Python 3.12 with NumPy 2.5.5, onnx 1.23.2,
-  onnxruntime 1.32.0 and psutil 7.2.2, and on Python 3.11 with NumPy 1.26.4 and onnx 1.16.1.
+- Verified 2026-11-26 on Python 3.14.3 (torch 2.15.0 CPU, onnx 1.23.2, onnxruntime 1.32.0,
+  transformers 4.57.6, NumPy 2.5.5) and Python 3.11.15 (NumPy 2.4.6). Supported: 3.11 to 3.14.
+- Python 3.14 needs `export/optimum_compat.py` (optimum-onnx `with_args` partials); a T5
+  seq2seq export through flouds-onnx passes on 3.14 and 3.11.
 
 ## Open items
 

@@ -195,7 +195,7 @@ def _output_names_include_logits(output_names: list[str]) -> bool:
     return any(_is_logits_output_name(name) for name in output_names)
 
 
-def _resolve_onnx_input_name(name: str, tokenizer_outputs: dict, sess_inputs: List) -> str | None:
+def _resolve_onnx_input_name(name: str, tokenizer_outputs: dict) -> str | None:
     """Resolve an ONNX input name to a tokenizer output key using heuristics.
 
     Returns the matched key or None if no suitable match found.
@@ -325,7 +325,7 @@ def build_onnx_inputs(sess: Any, tokenizer_outputs: dict[str, Any]) -> dict[str,
 
     # Map each ONNX input to tokenizer output or synthesize default
     for name in input_names:
-        matched_key = _resolve_onnx_input_name(name, tokenizer_outputs, input_names)
+        matched_key = _resolve_onnx_input_name(name, tokenizer_outputs)
         if matched_key:
             inputs[name] = _to_numpy(tokenizer_outputs[matched_key])
             continue
@@ -907,7 +907,6 @@ def main(argv: List[str] | None = None) -> int:
                     tok_out=tok_out,
                     ref_token_embeddings=ref_token_embeddings,
                     attention_mask=attention_mask,
-                    normalize_flag=normalize_embeddings,
                 )
                 print(f"Diagnostic dumps written to: {os.path.join(model_dir, 'validation_dumps')}")
             except Exception as dbg_err:

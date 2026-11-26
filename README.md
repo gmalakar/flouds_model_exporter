@@ -35,8 +35,8 @@ pip install flouds-model-exporter
 git clone https://github.com/gmalakar/flouds_model_exporter.git
 cd flouds_model_exporter
 
-# Create a Python 3.12 virtual environment (3.11 is also supported)
-py -3.12 -m venv .venv
+# Create a Python 3.14 virtual environment
+py -3.14 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
 # Install the package and all dependencies
@@ -364,7 +364,7 @@ export(
 | `trust_remote_code` | `bool` | `False` | Allow custom model code |
 | `use_external_data_format` | `bool` | `False` | Split model for >2GB exports |
 | `use_subprocess` | `bool` | `None` | Run export in isolated subprocess |
-| `use_fallback_if_failed` | `bool` | `False` | Allow the legacy exporter and precision-lowering (float16) retries if the primary export fails |
+| `use_fallback_if_failed` | `bool` | `False` | Retry a failed in-process export with the fallback strategies (other opsets, external data) and allow the precision-lowering (fp16) one |
 | `min_free_memory_gb` | `float` | `None` | Free-RAM threshold before export; below it conservative flags are applied |
 | `require_sufficient_memory` | `bool` | `False` | Fail when `min_free_memory_gb` is not satisfied |
 | `merge` | `bool` | `False` | Merge decoder artifacts (LLMs) |
@@ -406,7 +406,7 @@ All of them derive from `ExporterError`.
 
 - **Remote code.** `trust_remote_code=True` runs Python from the model repository on your machine. The exporter never enables it by itself; review the repository first.
 - **Tokens.** A token passed to `export()` is used for that call only. It is not written to disk and no login is performed. Prefer the `HUGGINGFACE_HUB_TOKEN` (or `HF_TOKEN`) environment variable over `--huggingface_hub_token`, which is visible in the process list.
-- **Fallbacks.** If an export only succeeds through a fallback, `export_fallback.json` in the output directory records which one and what it changed. A fallback that lowers precision to float16 runs only with `use_fallback_if_failed=True`.
+- **Fallbacks.** If an export only succeeds through a fallback, `export_fallback.json` in the output directory records which one and what it changed. A fallback that lowers precision to fp16 runs only with `use_fallback_if_failed=True`.
 
 ### Upgrading from 1.x
 
@@ -463,7 +463,7 @@ The standalone `optimize` subcommand accepts `--model-dir`, `--model-for`, `--op
 |-----------|-------------|
 | `--use-external-data-format` | Split model into .onnx + .onnx_data files (for >2GB models) |
 | `--use-sub-process` | Run export in isolated subprocess (safer for large models) |
-| `--use-fallback-if-failed` | Enable legacy fallback exporter only if primary export fails |
+| `--use-fallback-if-failed` | Run the fallback strategies (child processes, other opsets, external data) when the export fails in-process, and allow the ones that lower precision to fp16. |
 | `--no-post-process` | Skip ONNX post-processing (reduces memory usage) |
 | `--min-free-memory-gb` | Minimum free RAM before export; below this threshold conservative low-memory flags are applied |
 | `--require-sufficient-memory` | Fail instead of continuing when `--min-free-memory-gb` is not satisfied |
@@ -606,7 +606,7 @@ flouds-export export `
 |-------|----------|
 | `ModuleNotFoundError: optimum` | Install runtime dependencies: `pip install -r requirements-prod.txt` |
 | `MemoryError` or OOM crashes | Use `--use-sub-process` and `--use-external-data-format`; reduce `--optimization-level` |
-| Primary export fails on edge models | Retry with `--use-fallback-if-failed` to enable legacy fallback path |
+| Primary export fails on edge models | Retry with `--use-fallback-if-failed` (fallback strategies; fp16 allowed) |
 | `RuntimeError: > 2GiB protobuf` | Enable `--use-external-data-format` |
 | `ValueError: Unsupported opset` | Lower `--opset-version` to 14 or 11 |
 | `TracerWarning: Converting tensor` | Model tracing limitation (usually safe to ignore) |
@@ -621,7 +621,7 @@ By default, export logs go to the terminal only. When `--log-to-file` or `log_to
 
 ## Requirements
 
-- **Python**: 3.11 or 3.12
+- **Python**: 3.11 to 3.14 (development and the Flouds services use 3.14)
 - **System**: 8GB+ RAM (16GB+ for large models)
 - **Dependencies**: See `requirements-prod.txt` (runtime) and `requirements-dev.txt` (development). NumPy 1.26 and 2.x, and onnx 1.16.1 up to (not including) 2.0, are supported.
 - **PyTorch**: installed as a dependency of the export stack; install a specific build first if you need one.

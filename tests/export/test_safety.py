@@ -18,7 +18,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from model_exporter.errors import ExporterError, ExportInProgressError, ExportValidationError, InvalidModelReferenceError, RemoteCodeNotAllowedError
-from model_exporter.export import legacy_fallback, pipeline_helpers, pipeline_v2, source_ref, subprocess_runner
+from model_exporter.export import optimum_export, pipeline_helpers, source_ref, subprocess_runner
 from model_exporter.export.source_ref import hub_clone_url, validate_model_reference
 
 log = logging.getLogger("test_safety")
@@ -48,7 +48,7 @@ def test_trust_remote_code_is_never_raised_on_the_callers_behalf():
         patch.object(transformers.AutoConfig, "from_pretrained", side_effect=_loader(seen)),
     ):
         with pytest.raises(RemoteCodeNotAllowedError) as raised:
-            pipeline_v2._load_transformers_components("org/custom-code-model", False, None, log)
+            optimum_export._load_transformers_components("org/custom-code-model", False, None, log)
 
     assert seen == [False], "the load must not be retried with trust_remote_code=True"
     assert "org/custom-code-model" in str(raised.value)
@@ -64,29 +64,29 @@ def test_trust_remote_code_is_used_when_the_caller_allows_it():
         patch.object(transformers.AutoModel, "from_pretrained", side_effect=_loader(seen)),
         patch.object(transformers.AutoConfig, "from_pretrained", side_effect=_loader(seen)),
     ):
-        tokenizer, model, config = pipeline_v2._load_transformers_components("org/custom-code-model", True, None, log)
+        tokenizer, model, config = optimum_export._load_transformers_components("org/custom-code-model", True, None, log)
 
     assert seen == [True, True, True]
     assert tokenizer is not None and model is not None and config is not None
 
 
 def test_fallback_exporter_does_not_default_to_trusting_remote_code():
-    source = Path(pipeline_v2.__file__).read_text(encoding="utf-8")
+    source = Path(optimum_export.__file__).read_text(encoding="utf-8")
     assert 'me_kwargs.get("trust_remote_code", True)' not in source
 
 
 @pytest.mark.parametrize("strategy", ["__use_local__", "__snapshot__", "__clone__"])
 def test_remote_code_strategies_are_refused_without_consent(strategy, tmp_path):
     with patch.object(source_ref.subprocess, "check_call") as git:
-        me_try, cleanup, reason = pipeline_v2._prepare_strategy({"trust_remote_code": False}, "s", {strategy: True}, str(tmp_path), log)
+        me_try, cleanup, reason = optimum_export._prepare_strategy({"trust_remote_code": False}, {strategy: True}, str(tmp_path), log)
     assert me_try is None and cleanup is None
     assert "trust_remote_code" in reason
     git.assert_not_called()
 
 
 def test_fallback_list_offers_remote_code_strategies_only_with_consent():
-    without = [name for name, _ in pipeline_v2._build_fallback_strategies("does not recognize model type", False)]
-    allowed = [name for name, _ in pipeline_v2._build_fallback_strategies("does not recognize model type", True)]
+    without = [name for name, _ in optimum_export._build_fallback_strategies("does not recognize model type", False)]
+    allowed = [name for name, _ in optimum_export._build_fallback_strategies("does not recognize model type", True)]
     for name in ("local_path", "clone_repo", "snapshot_retry"):
         assert name not in without
         assert name in allowed
@@ -119,7 +119,7 @@ def test_hub_clone_url_accepts_ids_and_https_only():
 def test_clone_strategy_gives_git_a_checked_url_after_a_separator():
     calls = []
     with patch.object(source_ref.subprocess, "check_call", side_effect=calls.append):
-        me_try, cleanup, _ = pipeline_v2._prepare_strategy({"trust_remote_code": True}, "clone_repo", {"__clone__": True}, "org/model", log)
+        me_try, cleanup, _ = optimum_export._prepare_strategy({"trust_remote_code": True}, {"__clone__": True}, "org/model", log)
     assert me_try is not None
     cleanup()
     argv = calls[0]
@@ -127,15 +127,8 @@ def test_clone_strategy_gives_git_a_checked_url_after_a_separator():
     assert argv[5] == "https://huggingface.co/org/model"
 
     with patch.object(source_ref.subprocess, "check_call") as git:
-        me_try, _, reason = pipeline_v2._prepare_strategy({"trust_remote_code": True}, "clone_repo", {"__clone__": True}, "--upload-pack=x", log)
+        me_try, _, reason = optimum_export._prepare_strategy({"trust_remote_code": True}, {"__clone__": True}, "--upload-pack=x", log)
     assert me_try is None and reason
-    git.assert_not_called()
-
-
-def test_legacy_clone_refuses_option_like_sources():
-    with patch.object(source_ref.subprocess, "check_call") as git:
-        path, error = legacy_fallback._prepare_clone_source("--upload-pack=x", log)
-    assert path is None and error
     git.assert_not_called()
 
 
@@ -150,10 +143,10 @@ def test_token_reaches_the_exporter_as_an_argument(tmp_path):
         return True, "", child_tmp
 
     with (
-        patch.object(pipeline_v2, "_attempt_inprocess_export", side_effect=fake_inprocess),
-        patch.object(pipeline_v2, "cleanup_temporary_export_artifacts"),
+        patch.object(optimum_export, "_attempt_inprocess_export", side_effect=fake_inprocess),
+        patch.object(optimum_export, "cleanup_temporary_export_artifacts"),
     ):
-        ok, _ = pipeline_v2.export_v2_main_export(
+        ok, _ = optimum_export.export_v2_main_export(
             "org/model", str(tmp_path), "fe", 17, "cpu", "feature-extraction", "pt", "transformers", False, log, auth_token="hf_secret"
         )
     assert ok
@@ -180,7 +173,7 @@ def test_token_is_not_written_to_the_subprocess_argument_file(monkeypatch):
 
 
 def test_tokens_are_redacted_from_logged_arguments():
-    logged = pipeline_v2._sanitize_kwargs_for_logging({"token": "hf_secret", "model_name_or_path": "org/model"})
+    logged = optimum_export._sanitize_kwargs_for_logging({"token": "hf_secret", "model_name_or_path": "org/model"})
     assert "hf_secret" not in json.dumps(logged, default=str)
     assert logged["model_name_or_path"] == "org/model"
 
@@ -206,7 +199,7 @@ def test_lock_left_by_a_dead_process_is_taken_over(tmp_path):
 
 
 def test_library_source_never_ends_the_process():
-    root = Path(pipeline_v2.__file__).parents[1]
+    root = Path(optimum_export.__file__).parents[1]
     offenders = []
     for path in root.rglob("*.py"):
         if "cli" in path.parts or path.name == "numeric.py":  # command-line entry points may exit; the checker's child script uses sys.exit
@@ -279,11 +272,11 @@ def _run_fallbacks(tmp_path, allow):
         return True, ""
 
     with (
-        patch.object(pipeline_v2, "_build_fallback_strategies", return_value=[("half", {"dtype": "float16"}), ("opset_14", {"opset": 14})]),
-        patch.object(pipeline_v2, "_run_main_export_subprocess", side_effect=fake_subprocess),
-        patch.object(pipeline_v2, "_move_working_to_output"),
+        patch.object(optimum_export, "_build_fallback_strategies", return_value=[("half", {"dtype": "float16"}), ("opset_14", {"opset": 14})]),
+        patch.object(optimum_export, "_run_main_export_subprocess", side_effect=fake_subprocess),
+        patch.object(optimum_export, "_move_working_to_output"),
     ):
-        ok, _ = pipeline_v2._execute_fallback_loop(
+        ok, _ = optimum_export._execute_fallback_loop(
             {"opset": 17}, "boom", "org/model", str(tmp_path), str(tmp_path), False, log, allow_precision_fallback=allow
         )
     return ok, attempted
@@ -326,8 +319,8 @@ def test_temp_cleanup_leaves_recent_directories_alone(tmp_path, monkeypatch):
 
 
 def test_export_passes_a_stale_age_to_every_cleanup_call():
-    root = Path(pipeline_v2.__file__).parent
-    for name in ("pipeline.py", "pipeline_v2.py"):
+    root = Path(optimum_export.__file__).parent
+    for name in ("pipeline.py", "optimum_export.py"):
         for call in re.findall(r"cleanup_temporary_export_artifacts\((.*?)\)", (root / name).read_text(encoding="utf-8")):
             assert "max_age_seconds=STALE_TEMP_SECONDS" in call, f"{name}: {call}"
 
@@ -351,7 +344,7 @@ def test_documented_import_of_export_is_callable():
         "assert export_model is pipeline.export\n"
         "try:\n    export('')\nexcept ValueError as exc:\n    print('called:', exc)\n"
     )
-    src = str(Path(pipeline_v2.__file__).parents[2])
+    src = str(Path(optimum_export.__file__).parents[2])
     result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env={**os.environ, "PYTHONPATH": src}, timeout=300)
     assert result.returncode == 0, result.stderr[-800:]
     assert "called: model_name cannot be empty" in result.stdout
@@ -363,9 +356,9 @@ def test_documented_import_of_export_is_callable():
 def test_failed_export_error_carries_the_last_reason():
     from model_exporter.errors import ExportFailedError
 
-    pipeline_v2.reset_export_failure()
-    pipeline_v2._note_failure("line one\nOSError: org/missing is not a valid model identifier\n")
-    detail, cause = pipeline_v2.last_export_failure()
+    optimum_export.reset_export_failure()
+    optimum_export._note_failure("line one\nOSError: org/missing is not a valid model identifier\n")
+    detail, cause = optimum_export.last_export_failure()
     error = ExportFailedError("org/missing", detail)
 
     assert cause is None
@@ -373,22 +366,22 @@ def test_failed_export_error_carries_the_last_reason():
     assert isinstance(error, RuntimeError) and isinstance(error, ExporterError)
     assert error.detail.startswith("line one")
 
-    pipeline_v2.reset_export_failure()
-    assert pipeline_v2.last_export_failure() == ("", None)
+    optimum_export.reset_export_failure()
+    assert optimum_export.last_export_failure() == ("", None)
 
 
 def test_failure_notes_are_per_thread():
     import threading
 
-    pipeline_v2.reset_export_failure()
-    pipeline_v2._note_failure("main thread failure")
+    optimum_export.reset_export_failure()
+    optimum_export._note_failure("main thread failure")
     seen = []
-    worker = threading.Thread(target=lambda: seen.append(pipeline_v2.last_export_failure()))
+    worker = threading.Thread(target=lambda: seen.append(optimum_export.last_export_failure()))
     worker.start()
     worker.join()
     assert seen == [("", None)]
-    assert pipeline_v2.last_export_failure()[0] == "main thread failure"
-    pipeline_v2.reset_export_failure()
+    assert optimum_export.last_export_failure()[0] == "main thread failure"
+    optimum_export.reset_export_failure()
 
 
 # -- revision pinning -----------------------------------------------------------
@@ -402,15 +395,15 @@ def test_revision_reaches_the_exporter(tmp_path):
         return True, "", child_tmp
 
     with (
-        patch.object(pipeline_v2, "_attempt_inprocess_export", side_effect=fake_inprocess),
-        patch.object(pipeline_v2, "cleanup_temporary_export_artifacts"),
+        patch.object(optimum_export, "_attempt_inprocess_export", side_effect=fake_inprocess),
+        patch.object(optimum_export, "cleanup_temporary_export_artifacts"),
     ):
-        pipeline_v2.export_v2_main_export(
+        optimum_export.export_v2_main_export(
             "org/model", str(tmp_path), "fe", 17, "cpu", "feature-extraction", "pt", "transformers", False, log, revision="abc123"
         )
         assert captured["revision"] == "abc123"
         captured.clear()
-        pipeline_v2.export_v2_main_export("org/model", str(tmp_path), "fe", 17, "cpu", "feature-extraction", "pt", "transformers", False, log)
+        optimum_export.export_v2_main_export("org/model", str(tmp_path), "fe", 17, "cpu", "feature-extraction", "pt", "transformers", False, log)
         assert "revision" not in captured
 
 

@@ -26,7 +26,7 @@ def _make_fake_modules(monkeypatch):
     fake_utils_helpers = cast(Any, types.ModuleType("model_exporter.utils.helpers"))
     fake_validation_invoker = cast(Any, types.ModuleType("model_exporter.validation.invoker"))
     fake_validation_checker = cast(Any, types.ModuleType("model_exporter.validation.checker"))
-    fake_pipeline_v2 = cast(Any, types.ModuleType("model_exporter.export.pipeline_v2"))
+    fake_optimum_export = cast(Any, types.ModuleType("model_exporter.export.optimum_export"))
     fake_pipeline_helpers = cast(Any, types.ModuleType("model_exporter.export.pipeline_helpers"))
 
     fake_config_logging.setup_export_logging = lambda *a, **kw: (
@@ -51,10 +51,10 @@ def _make_fake_modules(monkeypatch):
     fake_validation_invoker.invoke_validator = lambda *a, **kw: (0, True)
     fake_validation_checker.verify_models = lambda *a, **kw: True
 
-    fake_pipeline_v2._run_export_with_fallback = lambda *a, **kw: (True, False)
-    fake_pipeline_v2._run_post_optimization_validator = lambda *a, **kw: 0
-    fake_pipeline_v2.last_export_failure = lambda: ("", None)
-    fake_pipeline_v2.reset_export_failure = lambda: None
+    fake_optimum_export._run_export_with_fallback = lambda *a, **kw: (True, False)
+    fake_optimum_export._run_post_optimization_validator = lambda *a, **kw: 0
+    fake_optimum_export.last_export_failure = lambda: ("", None)
+    fake_optimum_export.reset_export_failure = lambda: None
 
     # pipeline_helpers: expose only what pipeline.py imports from it
     import contextlib
@@ -70,10 +70,9 @@ def _make_fake_modules(monkeypatch):
     fake_pipeline_helpers._is_seq2seq = lambda *a, **kw: False
     fake_pipeline_helpers._lift_temp_local_artifacts = lambda *a, **kw: None
     fake_pipeline_helpers._resolve_use_cache = lambda *a, **kw: False
-    fake_pipeline_helpers._run_numeric_validator = lambda *a, **kw: (0, True)
+    fake_pipeline_helpers._run_numeric_validator = lambda *a, **kw: 0
     fake_pipeline_helpers._run_quantization_step = lambda *a, **kw: None
-    fake_pipeline_helpers._setup_huggingface_hub_token = lambda *a, **kw: (None, {})
-    fake_pipeline_helpers._teardown_huggingface_hub_token = lambda *a, **kw: None
+    fake_pipeline_helpers._resolve_hub_token = lambda *a, **kw: None
     fake_pipeline_helpers._should_skip_validator = lambda *a, **kw: True
     fake_pipeline_helpers._with_export_lock = _fake_lock
 
@@ -84,7 +83,7 @@ def _make_fake_modules(monkeypatch):
         ("model_exporter.utils.helpers", fake_utils_helpers),
         ("model_exporter.validation.invoker", fake_validation_invoker),
         ("model_exporter.validation.checker", fake_validation_checker),
-        ("model_exporter.export.pipeline_v2", fake_pipeline_v2),
+        ("model_exporter.export.optimum_export", fake_optimum_export),
         ("model_exporter.export.pipeline_helpers", fake_pipeline_helpers),
     ]:
         monkeypatch.setitem(sys.modules, mod_name, mod)
@@ -300,7 +299,7 @@ def test_export_subpackage_import_is_lazy():
     for module_name in (
         "model_exporter.export",
         "model_exporter.export.pipeline",
-        "model_exporter.export.pipeline_v2",
+        "model_exporter.export.optimum_export",
         "model_exporter.export.helpers",
     ):
         sys.modules.pop(module_name, None)

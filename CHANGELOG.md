@@ -6,6 +6,28 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
+## [2.0.2] - 2026-11-26
+
+### Changed
+
+- Python 3.11, 3.12, 3.13 and 3.14 are supported (`requires-python = ">=3.11,<3.15"`). Development, CI checks that run once and the Flouds services use 3.14.
+- Development tools: black 25.12.0, isort 6.1.0, flake8 7.5.0, mypy 1.20.2, bandit 1.9.4, pre-commit 4.7.0, pre-commit-hooks 6.0.0. CI tests on 3.11, 3.12, 3.13 and 3.14.
+- The local pre-commit hooks run `python -E`, so a `python` on PATH of another version does not crash when pre-commit runs from a uv virtualenv.
+- `model_exporter.export.pipeline_v2` is renamed `model_exporter.export.optimum_export`: it is the engine behind `export()`, not a second pipeline. Code that imported the internal module directly must use the new name.
+- Internal cleanup, no behaviour change: parameters that were passed but never read are removed (`invoke_validator`'s `expected`, `pack_single_file` and `pack_single_threshold_mb`; `collect_diagnostics`'s `normalize_flag`; `setup_export_logging`'s `base_dir`; `export_v2_main_export`'s `use_auth_token`; the CLI runners' `parser`), `invoke_validator` returns just the validator code and `_run_numeric_validator` nothing (both returned values nobody read), and the token setup/teardown pair is one `_resolve_hub_token(token)`.
+
+### Removed
+
+- **Breaking:** `model_exporter.export.legacy_fallback` (`run_legacy_v1_fallback`). It repeated the v2 retries, ignored `--revision`, and ran only with `use_fallback_if_failed`. Its useful retries are v2 fallback strategies now (see Fixed).
+
+### Fixed
+
+- Fallback strategies: the precision retries passed `dtype="float16"`, which optimum silently ignores (it accepts `fp32`, `fp16`, `bf16`), so they exported at full precision; they now pass `fp16`. Retries that do not change precision (`no_post_process_external`, `opset_14`, `opset_11_external`) no longer carry a `dtype`, so they run without `use_fallback_if_failed`; before, the catch-all opset-11 retry was skipped unless the flag was set.
+- With `use_fallback_if_failed` and an in-process export (the default), a failure now runs the fallback strategies, each in a child process with the requested `revision`; before, only the legacy fallback ran, without the revision.
+- Export works on Python 3.14 for models whose optimum-onnx config uses `NormalizedConfig.with_args` (T5, GPT-2, BART, ...). Python 3.14 binds a `functools.partial` class attribute like a method, which failed with "got multiple values for argument 'allow_new'". `model_exporter.export.optimum_compat` applies the upstream fix (huggingface/optimum PR #2496) before every export, in-process and in the child process; remove it once optimum releases the fix.
+- `ExportInProgressError`, `ExportFailedError` and `ExportValidationError` survive `pickle` and `copy`; `ExportValidationError` failed to unpickle and the others came back with wrong fields.
+- The pre-push check script returned success on Windows before the checks finished (`os.execv` ends the calling process); it now waits for them.
+
 ## [2.0.1] - 2026-11-24
 
 Documentation only; no code changes.

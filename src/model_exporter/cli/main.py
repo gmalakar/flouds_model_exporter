@@ -54,14 +54,14 @@ def _build_root_parser():
         help="Validate exported ONNX models against a reference model",
     )
     _add_validate_arguments(validate_parser)
-    validate_parser.set_defaults(func=lambda args: _run_validate(args, validate_parser))
+    validate_parser.set_defaults(func=_run_validate)
 
     optimize_parser = subparsers.add_parser(
         "optimize",
         help="Run optimization on existing exported ONNX models",
     )
     _add_optimize_arguments(optimize_parser)
-    optimize_parser.set_defaults(func=lambda args: _run_optimize(args, optimize_parser))
+    optimize_parser.set_defaults(func=_run_optimize)
 
     batch_parser = subparsers.add_parser(
         "batch",

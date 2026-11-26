@@ -208,7 +208,7 @@ def _add_export_arguments(parser):
         "--use-fallback-if-failed",
         dest="use_fallback_if_failed",
         action="store_true",
-        help="Enable legacy fallback exporter only when the primary export path fails.",
+        help="Run the fallback strategies (child processes, other opsets, external data) when the export fails in-process, and allow the ones that lower precision to fp16.",
     )
     parser.add_argument(
         "--min-free-memory-gb",

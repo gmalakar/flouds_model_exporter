@@ -38,8 +38,7 @@ src/model_exporter/
 +-- export/
 |   +-- pipeline.py
 |   +-- pipeline_helpers.py
-|   +-- pipeline_v2.py
-|   +-- legacy_fallback.py
+|   +-- optimum_export.py
 |   +-- optimizer.py
 |   +-- helpers.py
 |   +-- options.py
@@ -60,7 +59,7 @@ src/model_exporter/
 2. Export
    - Primary path uses `optimum.exporters.onnx.main_export`.
    - Export settings are derived from `--model-for`, optional task/library overrides, opset, device, and portability flags.
-   - In subprocess mode the pipeline can retry with other settings if the first strategy fails. A retry that lowers numeric precision to float16 only runs with `--use-fallback-if-failed`. Whichever retry produces the model is recorded in `export_fallback.json` in the output directory.
+   - If the export fails, the pipeline can retry with other settings (opset 14, opset 11 with external data, skipping post-processing, a local clone when remote code is allowed), each in a child process. In subprocess mode the retries always run; in-process they run with `--use-fallback-if-failed`. A retry that lowers numeric precision to fp16 only runs with `--use-fallback-if-failed`. Whichever retry produces the model is recorded in `export_fallback.json` in the output directory.
    - `--revision` exports a specific branch, tag or commit.
    - A Hugging Face token is passed to the hub for this export only; it is not saved.
 
